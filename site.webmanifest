@@ -8,6 +8,12 @@
   "theme_color": "#0D0A1A",
   "icons": [
     {
+      "src": "/assets/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/assets/pocketdev-logo-512.png",
       "sizes": "512x512",
       "type": "image/png",
