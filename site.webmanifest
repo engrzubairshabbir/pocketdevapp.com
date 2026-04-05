@@ -1,0 +1,17 @@
+{
+  "name": "PocketDev",
+  "short_name": "PocketDev",
+  "description": "AI development assistant — code, images, and video on Android.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0A1A",
+  "theme_color": "#0D0A1A",
+  "icons": [
+    {
+      "src": "/assets/pocketdev-logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

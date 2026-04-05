@@ -7,7 +7,24 @@
   <meta name="description" content="PocketDev — AI apps, code, image editing, and ultra-realistic video from prompts or voice. Share creations and install on Google Play." />
   <meta property="og:title" content="PocketDev — AI Development Assistant" />
   <meta property="og:description" content="Build apps, images &amp; video with AI on your phone. $5 free credits. Install on Google Play for wallet top-ups." />
-  <meta property="og:url" content="https://pocketdevapp.com" />
+  <meta property="og:url" content="https://pocketdevapp.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="PocketDev" />
+  <meta property="og:image" content="https://pocketdevapp.com/assets/pocketdev-logo-512.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="PocketDev logo — AI development assistant for Android" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="PocketDev — AI Development Assistant" />
+  <meta name="twitter:description" content="Build apps, images &amp; video with AI on your phone. $5 free credits. Install on Google Play." />
+  <meta name="twitter:image" content="https://pocketdevapp.com/assets/pocketdev-logo-512.png" />
+  <meta name="theme-color" content="#0D0A1A" />
+  <link rel="canonical" href="https://pocketdevapp.com/" />
+  <link rel="icon" href="assets/pocketdev-logo-512.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="assets/pocketdev-logo-512.png" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/pocketdev-logo-512.png" />
+  <link rel="manifest" href="site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
   <style>
@@ -44,14 +61,16 @@
       backdrop-filter: blur(12px);
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .nav-logo .logo-icon {
-      width: 36px; height: 36px; border-radius: 10px;
-      background: linear-gradient(135deg, var(--primary2), var(--accent));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px; text-decoration: none;
+      transition: opacity .2s;
     }
-    .nav-logo span { font-size: 20px; font-weight: 900; color: var(--white); letter-spacing: -0.3px; }
+    .nav-logo:hover { opacity: .92; }
+    .nav-logo .logo-img {
+      width: 42px; height: 42px; border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
     .nav-links { display: flex; gap: 28px; list-style: none; }
     .nav-links a { color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color .2s; }
     .nav-links a:hover { color: var(--white); }
@@ -197,6 +216,10 @@
       box-shadow: 0 32px 80px rgba(91,33,182,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; gap: 12px; padding: 24px; margin: 0 auto;
+    }
+    .phone .phone-logo {
+      width: 72px; height: 72px; border-radius: 18px; object-fit: cover;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
     }
     .phone-screen-title { font-size: 22px; font-weight: 900; color: #A78BFA; }
     .phone-screen-sub { font-size: 12px; color: var(--muted); }
@@ -400,7 +423,12 @@
     }
     .footer-inner { max-width: 1100px; margin: 0 auto; }
     .footer-top { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 40px; margin-bottom: 40px; }
-    .footer-brand .logo-text { font-size: 22px; font-weight: 900; color: var(--white); }
+    .footer-brand .footer-logo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+    .footer-brand .footer-logo-img {
+      width: 52px; height: 52px; border-radius: 14px; object-fit: cover;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    }
+    .footer-brand .logo-text { font-size: 20px; font-weight: 900; color: var(--white); letter-spacing: -0.3px; }
     .footer-brand p { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 260px; }
     .footer-col h4 { font-size: 13px; font-weight: 700; color: var(--white); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
     .footer-col a { display: block; font-size: 14px; color: var(--muted); text-decoration: none; margin-bottom: 10px; transition: color .2s; }
@@ -426,9 +454,8 @@
 
 <!-- ── NAV ── -->
 <nav>
-  <a class="nav-logo" href="/">
-    <div class="logo-icon">🤖</div>
-    <span>PocketDev</span>
+  <a class="nav-logo" href="/" aria-label="PocketDev home">
+    <img class="logo-img" src="assets/pocketdev-logo-512.png" alt="" width="42" height="42" decoding="async" />
   </a>
   <ul class="nav-links">
     <li><a href="#features">Features</a></li>
@@ -469,7 +496,7 @@
   <!-- Phone mockup -->
   <div class="phone-wrap">
     <div class="phone">
-      <div style="font-size:32px">🤖</div>
+      <img class="phone-logo" src="assets/pocketdev-logo-512.png" alt="" width="72" height="72" decoding="async" />
       <div class="phone-screen-title">PocketDev</div>
       <div class="phone-screen-sub">AI development assistant</div>
       <div class="phone-field"></div>
@@ -688,7 +715,10 @@
   <div class="footer-inner">
     <div class="footer-top">
       <div class="footer-brand">
-        <div class="logo-text">🤖 PocketDev</div>
+        <div class="footer-logo-row">
+          <img class="footer-logo-img" src="assets/pocketdev-logo-512.png" alt="" width="52" height="52" decoding="async" />
+          <div class="logo-text">PocketDev</div>
+        </div>
         <p>Your pocket-sized AI studio — apps, code, images, ultra-realistic video, and shareable moments. Build and ship faster.</p>
       </div>
       <div class="footer-col">
@@ -720,6 +750,38 @@
     </div>
   </div>
 </footer>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "PocketDev",
+  "url": "https://pocketdevapp.com/",
+  "description": "AI apps, code, image editing, and ultra-realistic video from prompts or voice on Android.",
+  "publisher": {
+    "@type": "Organization",
+    "name": "PocketDev",
+    "url": "https://pocketdevapp.com/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://pocketdevapp.com/assets/pocketdev-logo-512.png",
+      "width": 512,
+      "height": 512
+    }
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "PocketDev",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Android",
+  "image": "https://pocketdevapp.com/assets/pocketdev-logo-512.png",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
 
 </body>
 </html>
