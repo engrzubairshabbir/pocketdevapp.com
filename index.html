@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PocketDev — AI Development Assistant</title>
+  <meta name="description" content="PocketDev — AI apps, code, image editing, and ultra-realistic video from prompts or voice. Share creations and install on Google Play." />
+  <meta property="og:title" content="PocketDev — AI Development Assistant" />
+  <meta property="og:description" content="Build apps, images &amp; video with AI on your phone. $5 free credits. Install on Google Play for wallet top-ups." />
+  <meta property="og:url" content="https://pocketdevapp.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary:   #5B21B6;
+      --primary2:  #7C3AED;
+      --accent:    #4338CA;
+      --green:     #4CAF50;
+      --dark:      #0D0A1A;
+      --dark2:     #1A1033;
+      --card:      #1E1540;
+      --text:      #E8E0FF;
+      --muted:     #A89DC8;
+      --white:     #FFFFFF;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--dark);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 32px;
+      background: rgba(13,10,26,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo .logo-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary2), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .nav-logo span { font-size: 20px; font-weight: 900; color: var(--white); letter-spacing: -0.3px; }
+    .nav-links { display: flex; gap: 28px; list-style: none; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color .2s; }
+    .nav-links a:hover { color: var(--white); }
+    .nav-cta {
+      background: linear-gradient(135deg, var(--primary2), var(--accent));
+      color: var(--white); border: none; padding: 10px 22px;
+      border-radius: 50px; font-size: 14px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: opacity .2s;
+    }
+    .nav-cta:hover { opacity: .85; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 120px 24px 80px;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(91,33,182,0.35) 0%, transparent 70%);
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%235B21B6' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4);
+      color: var(--green); padding: 6px 16px; border-radius: 50px;
+      font-size: 13px; font-weight: 600; margin-bottom: 28px;
+      animation: fadeUp .6s ease both;
+    }
+    .hero-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .hero h1 {
+      font-size: clamp(36px, 7vw, 72px);
+      font-weight: 900; line-height: 1.1; letter-spacing: -2px;
+      color: var(--white); margin-bottom: 20px;
+      animation: fadeUp .7s ease .1s both;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, #A78BFA, #818CF8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: clamp(16px, 2.5vw, 20px); color: var(--muted);
+      max-width: 680px; margin: 0 auto 40px;
+      animation: fadeUp .7s ease .2s both;
+    }
+    .hero-buttons {
+      display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+      animation: fadeUp .7s ease .3s both;
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: linear-gradient(135deg, var(--primary2), var(--accent));
+      color: var(--white); text-decoration: none;
+      padding: 16px 32px; border-radius: 50px;
+      font-size: 16px; font-weight: 700;
+      box-shadow: 0 8px 32px rgba(124,58,237,0.4);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,58,237,0.55); }
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+      color: var(--white); text-decoration: none;
+      padding: 16px 32px; border-radius: 50px;
+      font-size: 16px; font-weight: 600;
+      transition: background .2s;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+
+    .hero-buttons-dual {
+      display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
+      align-items: stretch; max-width: 720px; margin-left: auto; margin-right: auto;
+    }
+    .btn-play-hero {
+      display: inline-flex; align-items: center; gap: 14px;
+      background: #fff; color: #111;
+      padding: 18px 26px; border-radius: 16px;
+      text-decoration: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+      flex: 1; min-width: 240px; max-width: 360px;
+      justify-content: flex-start;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .btn-play-hero:hover { transform: translateY(-3px); box-shadow: 0 14px 44px rgba(0,0,0,0.45); }
+    .btn-play-hero .gplay-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg,#00C853,#00A844);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 20px; flex-shrink: 0;
+    }
+    .btn-play-hero .btn-lines small {
+      display: block; font-size: 12px; font-weight: 700; color: #1a73e8;
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+    .btn-play-hero .btn-lines strong {
+      display: block; font-size: 18px; font-weight: 900; color: #111; margin-top: 4px;
+      letter-spacing: -0.3px;
+    }
+    .btn-apk-hero {
+      display: inline-flex; align-items: center; gap: 14px;
+      background: linear-gradient(160deg, #2E7D32, #1B5E20);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #fff; padding: 18px 26px; border-radius: 16px;
+      text-decoration: none;
+      flex: 1; min-width: 240px; max-width: 360px;
+      justify-content: flex-start;
+      transition: transform .2s, opacity .2s;
+      opacity: 0.95;
+    }
+    .btn-apk-hero:hover { transform: translateY(-2px); opacity: 1; }
+    .btn-apk-hero .apk-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: rgba(255,255,255,0.15);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .btn-apk-hero .btn-lines small {
+      display: block; font-size: 11px; font-weight: 600; opacity: 0.9;
+    }
+    .btn-apk-hero .btn-lines strong {
+      display: block; font-size: 18px; font-weight: 900; margin-top: 4px;
+    }
+
+    .hero-note {
+      margin-top: 20px; font-size: 13px; color: var(--muted);
+      animation: fadeUp .7s ease .4s both;
+    }
+    .hero-note strong { color: var(--green); }
+
+    /* Phone mockup */
+    .phone-wrap {
+      margin-top: 64px; position: relative;
+      animation: fadeUp .8s ease .5s both;
+    }
+    .phone {
+      width: 240px; height: 480px;
+      background: linear-gradient(160deg, #1E1540, #0D0A1A);
+      border-radius: 36px; border: 2px solid rgba(255,255,255,0.1);
+      box-shadow: 0 32px 80px rgba(91,33,182,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; padding: 24px; margin: 0 auto;
+    }
+    .phone-screen-title { font-size: 22px; font-weight: 900; color: #A78BFA; }
+    .phone-screen-sub { font-size: 12px; color: var(--muted); }
+    .phone-field {
+      width: 100%; height: 40px; border-radius: 50px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    }
+    .phone-btn-main {
+      width: 100%; height: 42px; border-radius: 50px;
+      background: linear-gradient(135deg, #7C3AED, #4338CA);
+    }
+    .phone-btn-google {
+      width: 100%; height: 42px; border-radius: 50px;
+      background: transparent; border: 2px solid #4CAF50;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; font-size: 12px; color: var(--text); font-weight: 600;
+    }
+    .phone-glow {
+      position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%);
+      width: 200px; height: 80px;
+      background: radial-gradient(ellipse, rgba(124,58,237,0.6), transparent 70%);
+      filter: blur(20px);
+    }
+
+    @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ── STATS ── */
+    .stats {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 0;
+      background: rgba(255,255,255,0.03); border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .stat {
+      flex: 1; min-width: 160px; text-align: center;
+      padding: 32px 20px; border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num { font-size: 36px; font-weight: 900; color: var(--white); line-height: 1; }
+    .stat-num span { background: linear-gradient(135deg,#A78BFA,#818CF8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .stat-label { font-size: 14px; color: var(--muted); margin-top: 6px; }
+
+    /* ── SECTION COMMON ── */
+    section { padding: 96px 24px; }
+    .section-label {
+      display: inline-block; background: rgba(124,58,237,0.15);
+      border: 1px solid rgba(124,58,237,0.4); color: #A78BFA;
+      padding: 5px 14px; border-radius: 50px; font-size: 12px;
+      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .section-title { font-size: clamp(28px,4vw,44px); font-weight: 900; color: var(--white); line-height: 1.15; margin-bottom: 14px; }
+    .section-sub { font-size: 17px; color: var(--muted); max-width: 520px; }
+    .centered { text-align: center; }
+    .centered .section-sub { margin: 0 auto; }
+
+    /* ── FEATURES ── */
+    #features { background: var(--dark2); }
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px; max-width: 1100px; margin: 56px auto 0;
+    }
+    .feature-card {
+      background: var(--card); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px; padding: 28px;
+      transition: transform .2s, border-color .2s;
+    }
+    .feature-card:hover { transform: translateY(-4px); border-color: rgba(124,58,237,0.4); }
+    .feature-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: linear-gradient(135deg, rgba(124,58,237,0.3), rgba(67,56,202,0.3));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin-bottom: 18px;
+    }
+    .feature-card h3 { font-size: 18px; font-weight: 700; color: var(--white); margin-bottom: 10px; }
+    .feature-card p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── HOW IT WORKS ── */
+    .steps { display: flex; flex-direction: column; gap: 0; max-width: 640px; margin: 56px auto 0; }
+    .step { display: flex; gap: 24px; padding: 0 0 40px; position: relative; }
+    .step::before {
+      content: ''; position: absolute; left: 20px; top: 48px; bottom: 0;
+      width: 2px; background: linear-gradient(to bottom, rgba(124,58,237,0.5), transparent);
+    }
+    .step:last-child::before { display: none; }
+    .step-num {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--primary2), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 15px; color: var(--white);
+    }
+    .step h3 { font-size: 18px; font-weight: 700; color: var(--white); margin-bottom: 8px; }
+    .step p { font-size: 14px; color: var(--muted); }
+
+    /* ── PRICING ── */
+    #pricing { background: var(--dark2); }
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 20px; max-width: 900px; margin: 56px auto 0; }
+    .pricing-card {
+      background: var(--card); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 24px; padding: 36px 32px; text-align: center;
+    }
+    .pricing-card.featured {
+      border-color: var(--primary2);
+      background: linear-gradient(160deg, rgba(124,58,237,0.2), var(--card));
+      position: relative;
+    }
+    .pricing-badge {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, var(--primary2), var(--accent));
+      color: var(--white); padding: 4px 18px; border-radius: 50px;
+      font-size: 12px; font-weight: 700; white-space: nowrap;
+    }
+    .pricing-name { font-size: 16px; font-weight: 700; color: var(--muted); margin-bottom: 12px; }
+    .pricing-price { font-size: 48px; font-weight: 900; color: var(--white); line-height: 1; }
+    .pricing-price sup { font-size: 22px; vertical-align: top; margin-top: 10px; }
+    .pricing-price sub { font-size: 14px; color: var(--muted); }
+    .pricing-desc { font-size: 13px; color: var(--muted); margin: 12px 0 24px; }
+    .pricing-features { list-style: none; text-align: left; margin-bottom: 28px; }
+    .pricing-features li { font-size: 14px; color: var(--text); padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; }
+    .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .pricing-btn {
+      display: block; width: 100%; padding: 14px;
+      border-radius: 50px; font-size: 15px; font-weight: 700;
+      text-decoration: none; transition: opacity .2s;
+    }
+    .pricing-btn.outline { border: 2px solid rgba(255,255,255,0.2); color: var(--white); }
+    .pricing-btn.fill { background: linear-gradient(135deg, var(--primary2), var(--accent)); color: var(--white); }
+    .pricing-btn:hover { opacity: .8; }
+
+    /* ── PORTFOLIO / DOWNLOAD CARDS ── */
+    #portfolio { background: var(--dark); border-top: 1px solid rgba(255,255,255,0.06); }
+    .portfolio-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px; max-width: 960px; margin: 48px auto 0;
+    }
+    .portfolio-card {
+      background: var(--card); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px; padding: 32px 28px;
+      display: flex; flex-direction: column; align-items: flex-start;
+      transition: transform .2s, border-color .2s, box-shadow .2s;
+      text-align: left;
+    }
+    .portfolio-card:hover { transform: translateY(-4px); border-color: rgba(124,58,237,0.35); }
+    .portfolio-card.featured {
+      border-color: rgba(76,175,80,0.45);
+      background: linear-gradient(165deg, rgba(76,175,80,0.12), var(--card));
+      box-shadow: 0 20px 60px rgba(76,175,80,0.08);
+    }
+    .portfolio-card .card-badge {
+      display: inline-block; font-size: 11px; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase;
+      padding: 5px 12px; border-radius: 50px; margin-bottom: 16px;
+    }
+    .portfolio-card.featured .card-badge {
+      background: rgba(76,175,80,0.25); color: var(--green); border: 1px solid rgba(76,175,80,0.4);
+    }
+    .portfolio-card.alt .card-badge {
+      background: rgba(255,255,255,0.08); color: var(--muted); border: 1px solid rgba(255,255,255,0.12);
+    }
+    .portfolio-card h3 { font-size: 22px; font-weight: 800; color: var(--white); margin-bottom: 10px; line-height: 1.25; }
+    .portfolio-card p { font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 20px; flex: 1; }
+    .portfolio-card .card-actions { width: 100%; margin-top: auto; }
+    .btn-play {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 16px 22px; border-radius: 14px;
+      background: var(--white); color: #111; text-decoration: none;
+      font-weight: 800; font-size: 15px; transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+    }
+    .btn-play:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+    .btn-play small { display: block; font-size: 11px; font-weight: 600; opacity: .65; margin-top: 2px; }
+    .btn-apk {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 100%; padding: 14px 20px; border-radius: 14px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+      color: var(--text); text-decoration: none; font-weight: 700; font-size: 14px;
+      transition: background .2s;
+    }
+    .btn-apk:hover { background: rgba(255,255,255,0.12); }
+    .iap-notice {
+      margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+      background: rgba(255,193,7,0.08); border: 1px solid rgba(255,193,7,0.25);
+      font-size: 12px; color: #E8D4A8; line-height: 1.55;
+    }
+    .iap-notice strong { color: #FFE082; }
+
+    /* ── DOWNLOAD CTA (secondary) ── */
+    #download {
+      text-align: center;
+      background: linear-gradient(135deg, rgba(91,33,182,0.3), rgba(67,56,202,0.2));
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    #download h2 { font-size: clamp(28px,4vw,48px); font-weight: 900; color: var(--white); margin-bottom: 14px; }
+    #download .lead { font-size: 17px; color: var(--muted); margin-bottom: 8px; max-width: 640px; margin-left: auto; margin-right: auto; }
+    #download .sub { font-size: 14px; color: var(--muted); margin-bottom: 32px; opacity: .9; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: #080612; padding: 48px 24px 32px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .footer-inner { max-width: 1100px; margin: 0 auto; }
+    .footer-top { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 40px; margin-bottom: 40px; }
+    .footer-brand .logo-text { font-size: 22px; font-weight: 900; color: var(--white); }
+    .footer-brand p { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 260px; }
+    .footer-col h4 { font-size: 13px; font-weight: 700; color: var(--white); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+    .footer-col a { display: block; font-size: 14px; color: var(--muted); text-decoration: none; margin-bottom: 10px; transition: color .2s; }
+    .footer-col a:hover { color: var(--white); }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 24px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .footer-bottom p { font-size: 13px; color: var(--muted); }
+    .footer-bottom a { color: var(--muted); text-decoration: none; }
+    .footer-bottom a:hover { color: var(--white); }
+
+    /* ── MOBILE ── */
+    @media (max-width: 680px) {
+      nav { padding: 14px 20px; }
+      .nav-links { display: none; }
+      .hero { padding: 100px 20px 60px; }
+      .stat { min-width: 50%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06); }
+      section { padding: 64px 20px; }
+      .footer-top { flex-direction: column; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <a class="nav-logo" href="/">
+    <div class="logo-icon">🤖</div>
+    <span>PocketDev</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#portfolio">Download</a></li>
+    <li><a href="privacy.html">Privacy</a></li>
+  </ul>
+  <a class="nav-cta" href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer">Install Now</a>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="dot"></span>
+    DOWNLOAD
+  </div>
+  <h1>Start building <span>today</span></h1>
+  <p>Free to download. <strong>$5 credits</strong> on signup. No credit card required. Build apps and code, edit &amp; generate images with AI, and create <strong>ultra-realistic video</strong> from text or <strong>voice</strong> — then share and surprise anyone. Best for developers <em>and</em> content creators.</p>
+  <div class="hero-buttons hero-buttons-dual">
+    <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="btn-play-hero" target="_blank" rel="noopener noreferrer">
+      <span class="gplay-icon">▶</span>
+      <span class="btn-lines">
+        <small>Install Now</small>
+        <strong>Google Play</strong>
+      </span>
+    </a>
+    <a href="releases/PocketDev_AI_Android_V4.9.4.apk" class="btn-apk-hero" download>
+      <span class="apk-icon">📦</span>
+      <span class="btn-lines">
+        <small>Direct download (advanced)</small>
+        <strong>Download APK</strong>
+      </span>
+    </a>
+  </div>
+  <p class="hero-note">✓ <strong>Prefer Google Play</strong> — wallet top-ups &amp; in-app purchases use Google Play Billing and <strong>do not work</strong> the same on sideloaded APKs. &nbsp;·&nbsp; <strong>$5 free credits</strong> &nbsp;·&nbsp; Android 8.0+ &nbsp;·&nbsp; ~15MB &nbsp;·&nbsp; No ads</p>
+
+  <!-- Phone mockup -->
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="font-size:32px">🤖</div>
+      <div class="phone-screen-title">PocketDev</div>
+      <div class="phone-screen-sub">AI development assistant</div>
+      <div class="phone-field"></div>
+      <div class="phone-field"></div>
+      <div class="phone-btn-main"></div>
+      <div class="phone-btn-google">🔵 Continue with Google</div>
+    </div>
+    <div class="phone-glow"></div>
+  </div>
+</section>
+
+<!-- ── STATS ── -->
+<div class="stats">
+  <div class="stat">
+    <div class="stat-num"><span>AI</span></div>
+    <div class="stat-label">Code · images · video · voice</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num"><span>$5</span></div>
+    <div class="stat-label">Free credits on signup</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num"><span>∞</span></div>
+    <div class="stat-label">Projects you can build</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num"><span>📱</span></div>
+    <div class="stat-label">100% mobile — no laptop needed</div>
+  </div>
+</div>
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="centered">
+    <span class="section-label">Features</span>
+    <h2 class="section-title">Code, images &amp; video —<br />in one pocket studio</h2>
+    <p class="section-sub">PocketDev packs AI development, creative tools, and sharing into your Android phone.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🖼️</div>
+      <h3>AI Image Studio</h3>
+      <p>Enhance, modify, and rebuild powerful images from prompts. Iterate fast until the look is exactly yours.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎬</div>
+      <h3>Video from prompts or voice</h3>
+      <p>Create ultra-realistic clips with AI — type what you want or say it out loud. Built for reels, shorts, and storytellers.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🚀</div>
+      <h3>Share &amp; surprise</h3>
+      <p>Export with PocketDev branding and drop your Play link — charm friends, clients, or your feed in one tap.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🤖</div>
+      <h3>AI Code Generation</h3>
+      <p>Describe what you want to build and let AI write the code. Supports Android, web, Python, and more.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📁</div>
+      <h3>Project Manager</h3>
+      <p>Organize all your projects in one place. Create, import, search, and manage files directly on your phone.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">✏️</div>
+      <h3>Code Editor</h3>
+      <p>A full-featured mobile code editor with syntax highlighting, smart suggestions, and file management.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📸</div>
+      <h3>Camera AI</h3>
+      <p>Point your camera at a UI sketch or wireframe and let AI generate the code from your photo.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💬</div>
+      <h3>AI Prompt Workspace</h3>
+      <p>Chat with AI to refine your code, debug issues, explain concepts, and iterate on your projects.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <h3>Pay-As-You-Go Wallet</h3>
+      <p>Top up only what you need. No subscriptions. Start free with $5 credits, pay only when you use AI.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── PORTFOLIO: GET THE APP ── -->
+<section id="portfolio">
+  <div class="centered">
+    <span class="section-label">Get the app</span>
+    <h2 class="section-title">Download PocketDev</h2>
+    <p class="section-sub">We recommend Google Play for the full experience — including secure in-app purchases and automatic updates.</p>
+  </div>
+  <div class="portfolio-grid">
+    <article class="portfolio-card featured">
+      <span class="card-badge">Recommended</span>
+      <h3>Google Play Store</h3>
+      <p>Official listing: wallet top-ups and Google Play in-app purchases work <strong>only</strong> here. Trusted install, automatic updates, and the full billing experience.</p>
+      <div class="card-actions">
+        <a class="btn-play" href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer">
+          <span>Google Play</span>
+          <small>Install Now · com.pocketdev.ai.appbuilder</small>
+        </a>
+      </div>
+    </article>
+    <article class="portfolio-card alt">
+      <span class="card-badge">Advanced / sideload</span>
+      <h3>Direct APK</h3>
+      <p>Only if you cannot use Play (test devices, enterprise, or no Google account on device). Same app binary is not a substitute for the Play build for <strong>payments</strong>.</p>
+      <div class="card-actions">
+        <a class="btn-apk" href="releases/PocketDev_AI_Android_V4.9.4.apk" download>PocketDev_AI_Android_V4.9.4.apk</a>
+        <div class="iap-notice">
+          <strong>Why we discourage sideloading for most users:</strong> Google Play Billing (wallet top-ups, IAP) is tied to the Play-signed build. A direct APK <strong>cannot</strong> use Play’s purchase flow — you may be unable to top up. <strong>Install from Google Play</strong> for the full wallet and billing experience.
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how" style="background: var(--dark2);">
+  <div class="centered">
+    <span class="section-label">How it works</span>
+    <h2 class="section-title">From idea to code in minutes</h2>
+    <p class="section-sub">No setup, no laptop, no hassle.</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <h3>Install &amp; Sign Up</h3>
+        <p>Install from <strong>Google Play</strong> (recommended — wallet top-ups work there), or use the APK from our site if you need a direct install. Sign in with email or Google. Get $5 free credits.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <h3>Describe Your Project</h3>
+        <p>Type what you want to build in plain English. "Make a login screen" or "Build a REST API client".</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <h3>AI Generates the Code</h3>
+        <p>PocketDev's AI writes clean, production-ready code in seconds. Review and edit in the built-in editor.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div>
+        <h3>Export & Ship</h3>
+        <p>Export your project files, share them, or continue building. Your work is saved and organized automatically.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRICING ── -->
+<section id="pricing">
+  <div class="centered">
+    <span class="section-label">Pricing</span>
+    <h2 class="section-title">Simple, transparent pricing</h2>
+    <p class="section-sub">No subscriptions. Pay only for what you use. Start completely free.</p>
+  </div>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <div class="pricing-name">Guest / Free</div>
+      <div class="pricing-price"><sup>$</sup>0</div>
+      <div class="pricing-desc">No sign-up needed. Try PocketDev instantly.</div>
+      <ul class="pricing-features">
+        <li>$5 free trial credits</li>
+        <li>All core AI features</li>
+        <li>Project manager</li>
+        <li>Code editor</li>
+        <li>Guest mode — no login required</li>
+      </ul>
+      <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="pricing-btn outline" target="_blank" rel="noopener noreferrer">Install Now</a>
+    </div>
+    <div class="pricing-card featured">
+      <div class="pricing-badge">⭐ Most Popular</div>
+      <div class="pricing-name">Pay-As-You-Go</div>
+      <div class="pricing-price"><sup>$</sup>5 <sub>top-up</sub></div>
+      <div class="pricing-desc">Top up your wallet anytime. No expiry.</div>
+      <ul class="pricing-features">
+        <li>$5 welcome bonus on first login</li>
+        <li>Unlimited projects</li>
+        <li>All AI models (GPT-4, Claude)</li>
+        <li>Camera AI — code from photos</li>
+        <li>Priority AI responses</li>
+        <li>Full wallet history & transactions</li>
+      </ul>
+      <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="pricing-btn fill" target="_blank" rel="noopener noreferrer">Install Now — Google Play</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── DOWNLOAD CTA ── -->
+<section id="download">
+  <span class="section-label">Quick links</span>
+  <h2>Start building today</h2>
+  <p class="lead">Free to start — $5 credits when you sign in. Prefer <strong>Google Play</strong> so purchases and updates work smoothly.</p>
+  <p class="sub"><a href="#portfolio" style="color:#A78BFA;">See download cards above</a> for Play vs APK details.</p>
+  <div class="hero-buttons" style="justify-content:center">
+    <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="btn-primary" target="_blank" rel="noopener noreferrer">Install Now — Google Play</a>
+    <a href="releases/PocketDev_AI_Android_V4.9.4.apk" class="btn-secondary" download>Direct APK (limited IAP)</a>
+  </div>
+  <p style="margin-top:24px; font-size:13px; color:var(--muted);">
+    Android 8.0+ &nbsp;·&nbsp; No ads &nbsp;·&nbsp; IAP on Play only
+  </p>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <div class="logo-text">🤖 PocketDev</div>
+        <p>Your pocket-sized AI studio — apps, code, images, ultra-realistic video, and shareable moments. Build and ship faster.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="#features">Features</a>
+        <a href="#portfolio">Get the app</a>
+        <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer">Google Play</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#download">Download &amp; APK</a>
+        <a href="#how">How it works</a>
+      </div>
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+      </div>
+      <div class="footer-col">
+        <h4>Contact</h4>
+        <a href="mailto:hello@pocketdevapp.com">hello@pocketdevapp.com</a>
+        <a href="https://pocketdevapp.com">pocketdevapp.com</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2026 PocketDev. All rights reserved.</p>
+      <p>
+        <a href="privacy.html">Privacy Policy</a> &nbsp;·&nbsp;
+        <a href="terms.html">Terms of Service</a>
+      </p>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

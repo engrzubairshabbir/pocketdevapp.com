@@ -1,0 +1,8 @@
+Before deploying the website, copy your signed APK into this folder and name it exactly:
+
+  PocketDev_AI_Android_V4.9.4.apk
+
+The download link on the site is:
+  https://pocketdevapp.com/releases/PocketDev_AI_Android_V4.9.4.apk
+
+(If GitHub Pages uses the /website folder instead of root, the URL stays the same — the site root is still where index.html lives.)
