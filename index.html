@@ -27,32 +27,40 @@
   <link rel="apple-touch-icon" href="assets/pocketdev-logo-512.png" />
   <link rel="manifest" href="site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
 
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot }
+    import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, getDocs }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+    // Official Web Firebase Config matching Android app project pocketdev-8a59b
     const firebaseConfig = {
-      apiKey: "AIzaSyBZFotogckTcdr0sPqS1P1u2NON25Rgh04",
+      apiKey: "AIzaSyBvw1yRfj-zds4MqP2UL88GKiGK1nEOtvE",
       authDomain: "pocketdev-8a59b.firebaseapp.com",
       projectId: "pocketdev-8a59b",
-      storageBucket: "pocketdev-8a59b.appspot.com",
+      storageBucket: "pocketdev-8a59b.firebasestorage.app",
+      messagingSenderId: "89316733782",
+      appId: "1:89316733782:web:pocketdevapp",
     };
 
     const firebaseApp = initializeApp(firebaseConfig);
     const auth = getAuth(firebaseApp);
     const db = getFirestore(firebaseApp);
     const provider = new GoogleAuthProvider();
+    provider.addScope("profile");
+    provider.addScope("email");
 
     const BACKEND = "https://api-fsgs7romxq-uc.a.run.app";
 
     let currentUser = null;
     let usageChart = null;
+
+    // Check redirect result on load
+    getRedirectResult(auth).catch((err) => console.log("Redirect check:", err));
 
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
@@ -70,7 +78,16 @@
         showToast("Opening Google Sign-In…", "info");
         await signInWithPopup(auth, provider);
       } catch (e) {
-        showToast("Sign-in failed: " + e.message, "error");
+        console.warn("Popup error, trying redirect:", e);
+        if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user") {
+          try {
+            await signInWithRedirect(auth, provider);
+          } catch (rErr) {
+            showToast("Sign-in failed: " + rErr.message, "error");
+          }
+        } else {
+          showToast("Sign-in notice: " + e.message, "error");
+        }
       }
     };
 
@@ -88,16 +105,16 @@
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         });
         const data = await res.json();
-        renderBalance(data.balance);
-        if (data.newUser && data.welcomeBonus) {
-          showToast("🎉 Welcome! $5.00 credits added to your wallet!", "success");
-        }
-        // Real-time Firestore balance listener
+        const initialBal = data.balanceUsd !== undefined ? data.balanceUsd : (data.balance || 0);
+        renderBalance(initialBal);
+
+        // Real-time listener on users/{uid} — synchronizes with Android app's balanceUsd!
         onSnapshot(doc(db, "users", user.uid), (snap) => {
           if (snap.exists()) {
             const d = snap.data();
-            renderBalance(d.balance);
-            updateStatsUI(d);
+            const bal = d.balanceUsd !== undefined ? d.balanceUsd : (d.balance || 0);
+            renderBalance(bal);
+            updateCursorStatsUI(d);
           }
         });
       } catch (e) {
@@ -113,7 +130,7 @@
         });
         const data = await res.json();
         const usageData = (data.usage || []).reverse();
-        renderChart(usageData);
+        renderCursorChart(usageData);
         renderUsageTable(usageData);
       } catch (e) {
         console.error("Usage fetch error:", e);
@@ -129,17 +146,33 @@
       document.querySelectorAll(".balance-bar-fill").forEach(el => {
         el.style.width = pct + "%";
       });
+      const cursorBar = document.getElementById("cursor-balance-bar");
+      if (cursorBar) cursorBar.style.width = pct + "%";
     }
 
-    function updateStatsUI(data) {
-      const reqEl = document.getElementById("stat-requests");
-      const tokEl = document.getElementById("stat-tokens");
-      if (reqEl) reqEl.textContent = (data.totalRequests || 0).toLocaleString();
-      if (tokEl) tokEl.textContent = ((data.totalTokens || 0) / 1000).toFixed(1) + "K";
+    function updateCursorStatsUI(data) {
+      const reqEl = document.getElementById("cursor-stat-requests");
+      const tokEl = document.getElementById("cursor-stat-tokens");
+      const fastEl = document.getElementById("cursor-fast-requests");
+      const uidEl = document.getElementById("cursor-uid-val");
+
+      const totalReq = data.totalRequests || 0;
+      const totalTok = data.totalTokens || 0;
+
+      if (reqEl) reqEl.textContent = totalReq.toLocaleString();
+      if (tokEl) tokEl.textContent = (totalTok / 1000).toFixed(1) + "K";
+      if (fastEl) fastEl.textContent = `${totalReq} / 500 included`;
+      if (uidEl && currentUser) uidEl.textContent = currentUser.uid;
+
+      const fastBar = document.getElementById("cursor-fast-bar");
+      if (fastBar) {
+        const fastPct = Math.min((totalReq / 500) * 100, 100);
+        fastBar.style.width = fastPct + "%";
+      }
     }
 
-    function renderChart(data) {
-      const canvas = document.getElementById("usageChart");
+    function renderCursorChart(data) {
+      const canvas = document.getElementById("cursorUsageChart");
       if (!canvas || !window.Chart) return;
       const ctx = canvas.getContext("2d");
 
@@ -157,23 +190,23 @@
           labels,
           datasets: [
             {
-              label: "Requests",
+              label: "Fast Requests",
               data: requests,
-              backgroundColor: "rgba(124, 58, 237, 0.7)",
+              backgroundColor: "rgba(124, 58, 237, 0.75)",
               borderColor: "#7C3AED",
               borderWidth: 1,
               borderRadius: 6,
               yAxisID: "y",
             },
             {
-              label: "Cost ($)",
+              label: "Cost USD ($)",
               data: costs,
               type: "line",
               backgroundColor: "rgba(79, 209, 197, 0.15)",
               borderColor: "#4FD1C5",
               borderWidth: 2,
               pointBackgroundColor: "#4FD1C5",
-              tension: 0.3,
+              tension: 0.35,
               fill: true,
               yAxisID: "y1",
             },
@@ -181,23 +214,24 @@
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           plugins: {
-            legend: { labels: { color: "#E8E0FF" } },
-            tooltip: { backgroundColor: "#1E1540", titleColor: "#E8E0FF", bodyColor: "#A89DC8" },
+            legend: { labels: { color: "#C4B5FD", font: { family: "Inter", size: 12 } } },
+            tooltip: { backgroundColor: "#141126", titleColor: "#FFFFFF", bodyColor: "#A89DC8" },
           },
           scales: {
-            x: { ticks: { color: "#A89DC8" }, grid: { color: "rgba(255,255,255,0.05)" } },
+            x: { ticks: { color: "#A89DC8", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
             y: {
               type: "linear", position: "left",
-              ticks: { color: "#A89DC8" },
-              grid: { color: "rgba(255,255,255,0.05)" },
-              title: { display: true, text: "Requests", color: "#A89DC8" },
+              ticks: { color: "#C4B5FD" },
+              grid: { color: "rgba(255,255,255,0.04)" },
+              title: { display: true, text: "Requests", color: "#C4B5FD", font: { size: 11 } },
             },
             y1: {
               type: "linear", position: "right",
               ticks: { color: "#4FD1C5", callback: v => "$" + v },
               grid: { drawOnChartArea: false },
-              title: { display: true, text: "Cost ($)", color: "#4FD1C5" },
+              title: { display: true, text: "Cost ($)", color: "#4FD1C5", font: { size: 11 } },
             },
           },
         },
@@ -205,18 +239,19 @@
     }
 
     function renderUsageTable(data) {
-      const tbody = document.getElementById("usageTableBody");
+      const tbody = document.getElementById("cursorUsageTableBody");
       if (!tbody) return;
       if (!data.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">No usage recorded yet. Start using PocketDev!</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:#8B83A8">No usage recorded yet. Start prompting in the Android App!</td></tr>';
         return;
       }
       tbody.innerHTML = data.slice().reverse().map(d => `
         <tr>
-          <td>${d.date || "—"}</td>
-          <td>${d.requests || 0}</td>
-          <td>${((d.tokens || 0) / 1000).toFixed(1)}K</td>
-          <td>$${parseFloat(d.cost || 0).toFixed(5)}</td>
+          <td style="font-family:'JetBrains Mono',monospace;">${d.date || "—"}</td>
+          <td><span class="cursor-model-badge">Gemini 2.5 Flash</span></td>
+          <td style="font-weight:600;">${d.requests || 0} calls</td>
+          <td style="font-family:'JetBrains Mono',monospace;">${((d.tokens || 0) / 1000).toFixed(1)}K</td>
+          <td style="font-family:'JetBrains Mono',monospace;color:#4FD1C5;">$${parseFloat(d.cost || 0).toFixed(5)}</td>
         </tr>`).join("");
     }
 
@@ -232,6 +267,8 @@
       document.querySelectorAll(".user-email").forEach(el => {
         el.textContent = user.email;
       });
+      const uidEl = document.getElementById("cursor-uid-val");
+      if (uidEl) uidEl.textContent = user.uid;
     }
 
     function showLoggedOut() {
@@ -246,6 +283,22 @@
     };
     window.closeDashboard = () => {
       document.getElementById("dashboardModal")?.classList.remove("open");
+    };
+
+    window.switchCursorTab = (tabName) => {
+      document.querySelectorAll(".cursor-tab-content").forEach(el => el.style.display = "none");
+      document.querySelectorAll(".cursor-tab-btn").forEach(el => el.classList.remove("active"));
+      const target = document.getElementById("cursor-tab-" + tabName);
+      if (target) target.style.display = "block";
+      const btn = document.getElementById("cursor-btn-" + tabName);
+      if (btn) btn.classList.add("active");
+    };
+
+    window.copyUserUid = () => {
+      if (currentUser) {
+        navigator.clipboard.writeText(currentUser.uid);
+        showToast("Copied Firebase UID to clipboard!", "success");
+      }
     };
 
     function showToast(msg, type = "info") {
@@ -295,114 +348,197 @@
       display: flex; flex-direction: column; gap: 10px;
     }
     .toast {
-      background: var(--card); color: var(--text);
+      background: #19142E; color: var(--text);
       padding: 14px 20px; border-radius: 12px;
       font-size: 14px; font-weight: 500;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
       border-left: 4px solid var(--primary2);
+      border-top: 1px solid rgba(255,255,255,0.08);
       opacity: 0; transform: translateX(40px);
-      transition: all .3s ease; max-width: 340px;
+      transition: all .3s ease; max-width: 360px;
     }
     .toast.show { opacity: 1; transform: translateX(0); }
     .toast-success { border-left-color: #10B981; }
     .toast-error   { border-left-color: #EF4444; }
     .toast-info    { border-left-color: #4FD1C5; }
 
-    /* ── USER DASHBOARD MODAL ── */
+    /* ═══════════════════════════════════════════════════════════════════
+       CURSOR-STYLE RICH DASHBOARD MODAL
+       ═══════════════════════════════════════════════════════════════════ */
     .modal-overlay {
       position: fixed; inset: 0; z-index: 1000;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-      opacity: 0; pointer-events: none; transition: opacity .3s;
+      background: rgba(4, 3, 10, 0.85); backdrop-filter: blur(14px);
+      opacity: 0; pointer-events: none; transition: opacity .25s ease;
       display: flex; align-items: center; justify-content: center; padding: 20px;
     }
     .modal-overlay.open { opacity: 1; pointer-events: all; }
-    .dashboard-modal {
-      background: #120D26; border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 24px; width: 100%; max-width: 860px; max-height: 90vh;
-      overflow-y: auto; box-shadow: 0 32px 80px rgba(0,0,0,0.8);
-      transform: translateY(20px); transition: transform .3s;
+
+    .cursor-dashboard {
+      background: #0F0C1E;
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      border-radius: 20px; width: 100%; max-width: 960px; max-height: 92vh;
+      overflow-y: auto; box-shadow: 0 32px 100px rgba(0,0,0,0.9), 0 0 50px rgba(124, 58, 237, 0.15);
+      transform: translateY(20px); transition: transform .3s ease;
+      display: flex; flex-direction: column;
     }
-    .modal-overlay.open .dashboard-modal { transform: translateY(0); }
-    .dashboard-header {
-      padding: 24px 28px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    .modal-overlay.open .cursor-dashboard { transform: translateY(0); }
+
+    /* Cursor Top Header */
+    .cursor-header {
+      padding: 24px 30px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex; align-items: center; justify-content: space-between;
+      background: #141026;
+      border-top-left-radius: 20px; border-top-right-radius: 20px;
+    }
+    .cursor-user-block { display: flex; align-items: center; gap: 14px; }
+    .cursor-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 2px solid #7C3AED; box-shadow: 0 0 15px rgba(124, 58, 237, 0.4);
+    }
+    .cursor-name { font-size: 17px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .cursor-plan-pill {
+      background: rgba(124, 58, 237, 0.25); border: 1px solid #7C3AED;
+      color: #D8B4FE; font-size: 10px; font-weight: 800; padding: 2px 8px;
+      border-radius: 50px; text-transform: uppercase; letter-spacing: 0.8px;
+    }
+    .cursor-email-row { font-size: 12px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 8px; }
+    .cursor-sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #10B981; display: inline-block; box-shadow: 0 0 8px #10B981; }
+
+    .cursor-header-actions { display: flex; align-items: center; gap: 10px; }
+    .cursor-btn-signout {
+      background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #FCA5A5; padding: 7px 14px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; cursor: pointer; transition: all .2s;
+    }
+    .cursor-btn-signout:hover { background: rgba(239, 68, 68, 0.25); }
+    .cursor-btn-close {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted); width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 15px; transition: all .2s;
+    }
+    .cursor-btn-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+    /* Cursor Tab Navigation */
+    .cursor-tabs-bar {
+      display: flex; gap: 8px; padding: 12px 30px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: #110D21;
+    }
+    .cursor-tab-btn {
+      background: transparent; border: none; color: #8F85AF;
+      padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+      border-bottom: 2px solid transparent; transition: all .2s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .cursor-tab-btn:hover { color: #fff; }
+    .cursor-tab-btn.active {
+      color: #A78BFA; border-bottom-color: #7C3AED;
+    }
+
+    /* Cursor Dashboard Body */
+    .cursor-body { padding: 26px 30px; }
+
+    /* Top 4 Metrics Grid (Cursor Style) */
+    .cursor-metrics-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px; margin-bottom: 26px;
+    }
+    .cursor-metric-card {
+      background: #151128; border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 14px; padding: 20px; position: relative; overflow: hidden;
+    }
+    .cursor-metric-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, #7C3AED, #4FD1C5);
+    }
+    .cursor-metric-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.9px;
+      color: #9A8EB8; font-weight: 700; margin-bottom: 8px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .dashboard-title { font-size: 20px; font-weight: 800; color: #fff; }
-    .dashboard-close {
-      background: rgba(255,255,255,0.08); border: none; color: var(--muted);
-      width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
-      font-size: 16px; display: flex; align-items: center; justify-content: center;
-      transition: background .2s;
+    .cursor-metric-val {
+      font-size: 28px; font-weight: 800; color: #fff;
+      font-family: 'JetBrains Mono', monospace;
     }
-    .dashboard-close:hover { background: rgba(255,255,255,0.16); color: #fff; }
-    .dashboard-body { padding: 28px; }
+    .cursor-metric-val.balance-display { color: #4FD1C5; text-shadow: 0 0 20px rgba(79, 209, 197, 0.3); }
+    .cursor-metric-sub { font-size: 11px; color: #7B719A; margin-top: 6px; }
 
-    .profile-card {
-      display: flex; align-items: center; gap: 16px; padding: 18px;
-      background: var(--card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
-      margin-bottom: 24px;
-    }
-    .profile-card img { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--primary2); }
-    .profile-meta { flex: 1; }
-    .profile-name { font-size: 17px; font-weight: 700; color: #fff; }
-    .profile-email { font-size: 13px; color: var(--muted); }
-    .btn-signout {
-      background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
-      color: #FCA5A5; padding: 8px 16px; border-radius: 8px; font-size: 13px;
-      cursor: pointer; font-weight: 600; transition: background .2s;
-    }
-    .btn-signout:hover { background: rgba(239,68,68,0.25); }
+    /* Progress bar */
+    .cursor-bar-bg { background: rgba(255,255,255,0.06); border-radius: 50px; height: 6px; margin-top: 10px; overflow: hidden; }
+    .cursor-bar-fill { height: 100%; border-radius: 50px; background: linear-gradient(90deg, #7C3AED, #4FD1C5); width: 0%; transition: width .8s ease; }
 
-    .dash-stats-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px; margin-bottom: 24px;
+    /* Plan & Feature Meters */
+    .cursor-meters-box {
+      background: #141026; border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 22px; margin-bottom: 24px;
     }
-    .dash-stat-box {
-      background: var(--card); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 16px; padding: 18px; text-align: center;
-    }
-    .dash-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; }
-    .dash-stat-val { font-size: 26px; font-weight: 900; color: #fff; }
-    .dash-stat-val.balance-display { color: #4FD1C5; }
+    .cursor-meters-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+    .cursor-meter-row { margin-bottom: 14px; }
+    .cursor-meter-header { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+    .cursor-meter-name { font-weight: 600; color: #E8E0FF; }
+    .cursor-meter-val { font-family: 'JetBrains Mono', monospace; color: #A78BFA; }
 
-    .balance-bar-wrap { background: rgba(255,255,255,0.08); border-radius: 50px; height: 6px; margin-top: 10px; overflow: hidden; }
-    .balance-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary2), #4FD1C5); border-radius: 50px; transition: width .8s ease; width: 0%; }
-
-    .chart-container {
-      background: var(--card); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 16px; padding: 20px; margin-bottom: 24px;
+    /* Chart section */
+    .cursor-chart-card {
+      background: #141026; border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 22px; margin-bottom: 24px;
     }
-    .chart-heading { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 14px; }
+    .cursor-chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .cursor-chart-title { font-size: 14px; font-weight: 700; color: #fff; }
 
-    .usage-table-wrap {
-      background: var(--card); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 16px; padding: 20px; overflow-x: auto;
+    /* Table */
+    .cursor-table-wrap {
+      background: #141026; border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 20px; overflow-x: auto;
     }
-    .dash-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .dash-table th { text-align: left; padding: 10px 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-    .dash-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text); }
+    .cursor-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .cursor-table th {
+      text-align: left; padding: 10px 14px; color: #8F85AF; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .cursor-table td { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); color: #E8E0FF; }
+    .cursor-model-badge {
+      background: rgba(124, 58, 237, 0.2); border: 1px solid rgba(124, 58, 237, 0.4);
+      color: #C4B5FD; font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600;
+    }
+
+    /* Settings Tab items */
+    .cursor-setting-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 12px;
+    }
+    .cursor-setting-meta h4 { font-size: 14px; font-weight: 700; color: #fff; }
+    .cursor-setting-meta p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .cursor-btn-action {
+      background: linear-gradient(135deg, #7C3AED, #4338CA); color: #fff;
+      border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px;
+      font-weight: 700; cursor: pointer; text-decoration: none;
+    }
 
     /* ── AUTH NAV BUTTONS & PILL ── */
     .auth-logged-in { display: none; align-items: center; gap: 10px; }
     .auth-logged-out { display: flex; align-items: center; gap: 10px; }
     .nav-balance-pill {
       display: flex; align-items: center; gap: 8px;
-      background: rgba(124, 58, 237, 0.2); border: 1px solid rgba(124, 58, 237, 0.4);
+      background: rgba(124, 58, 237, 0.22); border: 1px solid rgba(124, 58, 237, 0.45);
       padding: 6px 14px; border-radius: 50px; font-size: 13px; font-weight: 700;
-      color: #4FD1C5; cursor: pointer; transition: background .2s;
+      color: #4FD1C5; cursor: pointer; transition: all .2s;
     }
-    .nav-balance-pill:hover { background: rgba(124, 58, 237, 0.35); }
+    .nav-balance-pill:hover { background: rgba(124, 58, 237, 0.38); transform: translateY(-1px); }
     .nav-user-avatar {
       width: 36px; height: 36px; border-radius: 50%;
       border: 2px solid var(--primary2); cursor: pointer; object-fit: cover;
     }
     .btn-nav-google {
-      display: flex; align-items: center; gap: 7px;
+      display: flex; align-items: center; gap: 8px;
       background: #fff; color: #111; border: none; padding: 8px 16px;
       border-radius: 50px; font-size: 13px; font-weight: 700; cursor: pointer;
-      transition: opacity .2s;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all .2s;
     }
-    .btn-nav-google:hover { opacity: .9; }
+    .btn-nav-google:hover { opacity: .92; transform: translateY(-1px); }
 
     /* ── ORIGINAL NAV ── */
     nav {
@@ -800,6 +936,10 @@
       section { padding: 64px 20px; }
       .footer-top { flex-direction: column; }
       .footer-bottom { flex-direction: column; text-align: center; }
+      .cursor-dashboard { max-height: 96vh; }
+      .cursor-header { padding: 18px 20px; }
+      .cursor-body { padding: 18px 20px; }
+      .cursor-tabs-bar { padding: 10px 16px 0; overflow-x: auto; }
     }
   </style>
 </head>
@@ -808,71 +948,207 @@
 <!-- Toast notification container -->
 <div id="toastContainer"></div>
 
-<!-- ── USER DASHBOARD MODAL ── -->
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CURSOR-STYLE RICH DEVELOPER DASHBOARD MODAL
+     ═══════════════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="dashboardModal" onclick="if(event.target===this)window.closeDashboard()">
-  <div class="dashboard-modal">
-    <div class="dashboard-header">
-      <div class="dashboard-title">⚡ My PocketDev Dashboard</div>
-      <button class="dashboard-close" onclick="window.closeDashboard()">✕</button>
-    </div>
-    <div class="dashboard-body">
+  <div class="cursor-dashboard">
 
-      <!-- Profile -->
-      <div class="profile-card">
-        <img class="user-avatar" src="assets/pocketdev-logo-512.png" alt="Profile" />
-        <div class="profile-meta">
-          <div class="profile-name user-display-name">Signed In User</div>
-          <div class="profile-email user-email">loading…</div>
-        </div>
-        <button class="btn-signout" onclick="window.signOutUser()">Sign Out</button>
-      </div>
-
-      <!-- Stats -->
-      <div class="dash-stats-grid">
-        <div class="dash-stat-box">
-          <div class="dash-stat-label">Wallet Balance</div>
-          <div class="dash-stat-val balance-display">$0.0000</div>
-          <div class="balance-bar-wrap">
-            <div class="balance-bar-fill"></div>
+    <!-- Cursor Top Header -->
+    <div class="cursor-header">
+      <div class="cursor-user-block">
+        <img class="cursor-avatar user-avatar" src="assets/pocketdev-logo-512.png" alt="Profile" />
+        <div>
+          <div class="cursor-name">
+            <span class="user-display-name">Developer</span>
+            <span class="cursor-plan-pill">PRO AGENT</span>
+          </div>
+          <div class="cursor-email-row">
+            <span class="cursor-sync-dot"></span>
+            <span class="user-email">email@domain.com</span>
+            <span style="opacity:0.4;">•</span>
+            <span style="color:#10B981;font-weight:600;">Android App Connected</span>
           </div>
         </div>
-        <div class="dash-stat-box">
-          <div class="dash-stat-label">Total AI Requests</div>
-          <div class="dash-stat-val" id="stat-requests">0</div>
-        </div>
-        <div class="dash-stat-box">
-          <div class="dash-stat-label">Tokens Used</div>
-          <div class="dash-stat-val" id="stat-tokens">0K</div>
-        </div>
       </div>
-
-      <!-- Daily Usage Graph -->
-      <div class="chart-container">
-        <div class="chart-heading">📊 Daily Usage &amp; Cost Graph (Last 30 Days)</div>
-        <canvas id="usageChart" height="180"></canvas>
+      <div class="cursor-header-actions">
+        <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer" class="cursor-btn-action" style="text-decoration:none;">
+          💳 Top Up Balance
+        </a>
+        <button class="cursor-btn-signout" onclick="window.signOutUser()">Sign Out</button>
+        <button class="cursor-btn-close" onclick="window.closeDashboard()">✕</button>
       </div>
-
-      <!-- Usage History Table -->
-      <div class="usage-table-wrap">
-        <div class="chart-heading">📋 Daily History Breakdown</div>
-        <table class="dash-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Requests</th>
-              <th>Tokens</th>
-              <th>Cost ($)</th>
-            </tr>
-          </thead>
-          <tbody id="usageTableBody">
-            <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">Sign in to see your daily usage</td></tr>
-          </tbody>
-        </table>
-      </div>
-
     </div>
-  </div>
-</div>
+
+    <!-- Cursor Navigation Tabs -->
+    <div class="cursor-tabs-bar">
+      <button class="cursor-tab-btn active" id="cursor-btn-overview" onclick="window.switchCursorTab('overview')">
+        ⚡ Overview &amp; Usage
+      </button>
+      <button class="cursor-tab-btn" id="cursor-btn-analytics" onclick="window.switchCursorTab('analytics')">
+        📊 Analytics &amp; Charts
+      </button>
+      <button class="cursor-tab-btn" id="cursor-btn-history" onclick="window.switchCursorTab('history')">
+        📋 Daily Breakdown
+      </button>
+      <button class="cursor-tab-btn" id="cursor-btn-settings" onclick="window.switchCursorTab('settings')">
+        ⚙️ Settings &amp; API
+      </button>
+    </div>
+
+    <!-- Cursor Dashboard Body -->
+    <div class="cursor-body">
+
+      <!-- TAB 1: OVERVIEW -->
+      <div class="cursor-tab-content" id="cursor-tab-overview">
+
+        <!-- Metrics Grid -->
+        <div class="cursor-metrics-grid">
+          <div class="cursor-metric-card">
+            <div class="cursor-metric-label">
+              <span>Wallet Balance (USD)</span>
+              <span style="color:#10B981;font-size:10px;">● Live App Sync</span>
+            </div>
+            <div class="cursor-metric-val balance-display">$0.0000</div>
+            <div class="cursor-bar-bg">
+              <div class="cursor-bar-fill" id="cursor-balance-bar"></div>
+            </div>
+            <div class="cursor-metric-sub">Matches Android wallet balance in real-time</div>
+          </div>
+
+          <div class="cursor-metric-card">
+            <div class="cursor-metric-label">
+              <span>Fast AI Queries</span>
+              <span style="color:#A78BFA;font-size:10px;">Gemini 2.5</span>
+            </div>
+            <div class="cursor-metric-val" id="cursor-stat-requests">0</div>
+            <div class="cursor-bar-bg">
+              <div class="cursor-bar-fill" id="cursor-fast-bar" style="background:#7C3AED;"></div>
+            </div>
+            <div class="cursor-metric-sub" id="cursor-fast-requests">0 / 500 included</div>
+          </div>
+
+          <div class="cursor-metric-card">
+            <div class="cursor-metric-label">
+              <span>Tokens Processed</span>
+              <span style="color:#F59E0B;font-size:10px;">Total</span>
+            </div>
+            <div class="cursor-metric-val" id="cursor-stat-tokens" style="color:#F59E0B;">0K</div>
+            <div class="cursor-metric-sub">Prompt &amp; Completion tokens combined</div>
+          </div>
+
+          <div class="cursor-metric-card">
+            <div class="cursor-metric-label">
+              <span>Reward Credits</span>
+              <span style="color:#38BDF8;font-size:10px;">Bonus</span>
+            </div>
+            <div class="cursor-metric-val" style="color:#38BDF8;">50</div>
+            <div class="cursor-metric-sub">5 credits per $1 Google Play top-up</div>
+          </div>
+        </div>
+
+        <!-- Cursor Meters & Limits -->
+        <div class="cursor-meters-box">
+          <div class="cursor-meters-title">
+            <span>Model Capabilities &amp; Quotas</span>
+            <span style="font-size:12px;color:#10B981;font-weight:600;">Active Subscription</span>
+          </div>
+
+          <div class="cursor-meter-row">
+            <div class="cursor-meter-header">
+              <span class="cursor-meter-name">⚡ Gemini 2.5 Flash (Code Generation &amp; Agent Chat)</span>
+              <span class="cursor-meter-val">Unlimited Pay-as-you-go</span>
+            </div>
+            <div class="cursor-bar-bg"><div class="cursor-bar-fill" style="width:100%;background:#10B981;"></div></div>
+          </div>
+
+          <div class="cursor-meter-row">
+            <div class="cursor-meter-header">
+              <span class="cursor-meter-name">🎥 Veo 3.1 Fast (Cinematic Video Generation)</span>
+              <span class="cursor-meter-val">Available with Wallet Balance</span>
+            </div>
+            <div class="cursor-bar-bg"><div class="cursor-bar-fill" style="width:75%;background:#8B5CF6;"></div></div>
+          </div>
+
+          <div class="cursor-meter-row">
+            <div class="cursor-meter-header">
+              <span class="cursor-meter-name">📸 Camera AI Vision (Photo-to-Code &amp; Diagrams)</span>
+              <span class="cursor-meter-val">Enabled</span>
+            </div>
+            <div class="cursor-bar-bg"><div class="cursor-bar-fill" style="width:90%;background:#06B6D4;"></div></div>
+          </div>
+        </div>
+
+      </div><!-- /#cursor-tab-overview -->
+
+      <!-- TAB 2: ANALYTICS & CHARTS -->
+      <div class="cursor-tab-content" id="cursor-tab-analytics" style="display:none;">
+        <div class="cursor-chart-card">
+          <div class="cursor-chart-header">
+            <div class="cursor-chart-title">📈 Daily Request Volume &amp; Cost Trend (Last 30 Days)</div>
+            <span style="font-size:11px;color:#A89DC8;">Updated real-time from Cloud Functions</span>
+          </div>
+          <div style="height:260px;position:relative;">
+            <canvas id="cursorUsageChart"></canvas>
+          </div>
+        </div>
+      </div><!-- /#cursor-tab-analytics -->
+
+      <!-- TAB 3: DAILY BREAKDOWN TABLE -->
+      <div class="cursor-tab-content" id="cursor-tab-history" style="display:none;">
+        <div class="cursor-table-wrap">
+          <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:14px;">📋 Request History Log</div>
+          <table class="cursor-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Model</th>
+                <th>Requests</th>
+                <th>Tokens</th>
+                <th>Cost ($)</th>
+              </tr>
+            </thead>
+            <tbody id="cursorUsageTableBody">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:#8B83A8">Sign in to view your daily usage history</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div><!-- /#cursor-tab-history -->
+
+      <!-- TAB 4: SETTINGS & API -->
+      <div class="cursor-tab-content" id="cursor-tab-settings" style="display:none;">
+        <div class="cursor-meters-box">
+          <div class="cursor-meters-title">Account &amp; Integration Settings</div>
+
+          <div class="cursor-setting-item">
+            <div class="cursor-setting-meta">
+              <h4>Firebase User ID (UID)</h4>
+              <p id="cursor-uid-val" style="font-family:'JetBrains Mono',monospace;color:#A78BFA;">Not logged in</p>
+            </div>
+            <button class="cursor-btn-action" onclick="window.copyUserUid()">Copy UID</button>
+          </div>
+
+          <div class="cursor-setting-item">
+            <div class="cursor-setting-meta">
+              <h4>Android App Synchronization</h4>
+              <p>Connected with package <code>com.pocketdev.ai.appbuilder</code></p>
+            </div>
+            <span style="color:#10B981;font-weight:700;font-size:12px;">ACTIVE</span>
+          </div>
+
+          <div class="cursor-setting-item">
+            <div class="cursor-setting-meta">
+              <h4>Wallet Top-ups</h4>
+              <p>Top-up your balance safely via Google Play Billing in the Android App</p>
+            </div>
+            <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer" class="cursor-btn-action" style="text-decoration:none;">Google Play</a>
+          </div>
+        </div>
+      </div><!-- /#cursor-tab-settings -->
+
+    </div><!-- /.cursor-body -->
+  </div><!-- /.cursor-dashboard -->
+</div><!-- /.modal-overlay -->
 
 <!-- ── ORIGINAL NAV WITH AUTH & LIVE BALANCE ADDED ── -->
 <nav>
@@ -898,8 +1174,8 @@
 
     <!-- Logged in state -->
     <div class="auth-logged-in">
-      <div class="nav-balance-pill" onclick="window.openDashboard()" title="Click to view full dashboard">
-        <span>💰</span>
+      <div class="nav-balance-pill" onclick="window.openDashboard()" title="Click to view full Cursor-style dashboard">
+        <span>⚡</span>
         <span class="balance-display">$0.0000</span>
       </div>
       <img class="nav-user-avatar user-avatar" src="assets/pocketdev-logo-512.png" alt="Profile" onclick="window.openDashboard()" title="Account Dashboard" />
