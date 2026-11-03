@@ -3,21 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PocketDev — AI Development Assistant</title>
-  <meta name="description" content="PocketDev — AI apps, code, image editing, and ultra-realistic video from prompts or voice. Share creations and install on Google Play." />
-  <meta property="og:title" content="PocketDev — AI Development Assistant" />
-  <meta property="og:description" content="Build apps, images &amp; video with AI on your phone. $5 free credits. Install on Google Play for wallet top-ups." />
+  <title>PocketDev ⚡ – AI Agent in Your Pocket</title>
+  <meta name="description" content="PocketDev – The most powerful agentic AI assistant for Android. Build apps, generate code, create images & videos, and more. Free $5 credits on signup." />
+  <meta property="og:title" content="PocketDev ⚡ – AI Agent in Your Pocket" />
+  <meta property="og:description" content="Build apps, code, images & ultra-realistic videos with AI. Free $5 credits on signup." />
   <meta property="og:url" content="https://pocketdevapp.com/" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="PocketDev" />
   <meta property="og:image" content="https://pocketdevapp.com/assets/pocketdev-logo-512.png" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="512" />
-  <meta property="og:image:height" content="512" />
-  <meta property="og:image:alt" content="PocketDev logo — AI development assistant for Android" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="PocketDev — AI Development Assistant" />
-  <meta name="twitter:description" content="Build apps, images &amp; video with AI on your phone. $5 free credits. Install on Google Play." />
+  <meta name="twitter:title" content="PocketDev ⚡ – AI Agent in Your Pocket" />
   <meta name="twitter:image" content="https://pocketdevapp.com/assets/pocketdev-logo-512.png" />
   <meta name="theme-color" content="#0D0A1A" />
   <link rel="canonical" href="https://pocketdevapp.com/" />
@@ -27,709 +21,1244 @@
   <link rel="apple-touch-icon" href="assets/pocketdev-logo-512.png" />
   <link rel="manifest" href="site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBZFotogckTcdr0sPqS1P1u2NON25Rgh04",
+      authDomain: "pocketdev-8a59b.firebaseapp.com",
+      projectId: "pocketdev-8a59b",
+      storageBucket: "pocketdev-8a59b.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID",
+    };
+
+    const firebaseApp = initializeApp(firebaseConfig);
+    const auth = getAuth(firebaseApp);
+    const db = getFirestore(firebaseApp);
+    const provider = new GoogleAuthProvider();
+
+    const BACKEND = "https://us-central1-pocketdev-8a59b.cloudfunctions.net/api";
+
+    // ── State ────────────────────────────────────────────────────────────────
+    let currentUser = null;
+    let userProfile = null;
+    let usageData = [];
+    let usageChart = null;
+
+    // ── Auth state ────────────────────────────────────────────────────────────
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      if (user) {
+        showLoggedIn(user);
+        await fetchProfile(user);
+        await fetchUsage(user);
+      } else {
+        showLoggedOut();
+      }
+    });
+
+    // ── Sign in ───────────────────────────────────────────────────────────────
+    window.signInWithGoogle = async () => {
+      try {
+        showToast("Opening Google Sign-In…", "info");
+        await signInWithPopup(auth, provider);
+      } catch (e) {
+        showToast("Sign-in failed: " + e.message, "error");
+      }
+    };
+
+    // ── Sign out ──────────────────────────────────────────────────────────────
+    window.signOutUser = async () => {
+      await signOut(auth);
+      showToast("Signed out successfully.", "info");
+      hideDashboard();
+    };
+
+    // ── Fetch profile from backend ────────────────────────────────────────────
+    async function fetchProfile(user) {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch(`${BACKEND}/auth/login`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        userProfile = data;
+        renderBalance(data.balance);
+        if (data.newUser && data.welcomeBonus) {
+          showToast("🎉 Welcome! $5.00 credits added to your wallet!", "success");
+        }
+        // Live balance listener
+        onSnapshot(doc(db, "users", user.uid), (snap) => {
+          if (snap.exists()) {
+            const d = snap.data();
+            renderBalance(d.balance);
+            updateProfileStats(d);
+          }
+        });
+      } catch (e) {
+        console.error("Profile fetch error:", e);
+      }
+    }
+
+    // ── Fetch usage data ──────────────────────────────────────────────────────
+    async function fetchUsage(user) {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch(`${BACKEND}/auth/usage`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        usageData = (data.usage || []).reverse();
+        renderChart(usageData);
+        renderUsageTable(usageData);
+      } catch (e) {
+        console.error("Usage fetch error:", e);
+      }
+    }
+
+    // ── Render balance ────────────────────────────────────────────────────────
+    function renderBalance(bal) {
+      const b = parseFloat(bal || 0).toFixed(4);
+      document.querySelectorAll(".balance-display").forEach(el => {
+        el.textContent = `$${b}`;
+      });
+      // Progress bar (max $10)
+      const pct = Math.min((parseFloat(bal) / 10) * 100, 100);
+      document.querySelectorAll(".balance-bar-fill").forEach(el => {
+        el.style.width = pct + "%";
+      });
+    }
+
+    // ── Update profile stats ──────────────────────────────────────────────────
+    function updateProfileStats(data) {
+      const el = id => document.getElementById(id);
+      if (el("stat-requests")) el("stat-requests").textContent = (data.totalRequests || 0).toLocaleString();
+      if (el("stat-tokens")) el("stat-tokens").textContent = ((data.totalTokens || 0) / 1000).toFixed(1) + "K";
+    }
+
+    // ── Render usage chart ────────────────────────────────────────────────────
+    function renderChart(data) {
+      const canvas = document.getElementById("usageChart");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+
+      const labels = data.map(d => {
+        const dt = new Date(d.date);
+        return dt.toLocaleDateString("en", { month: "short", day: "numeric" });
+      });
+      const requests = data.map(d => d.requests || 0);
+      const costs = data.map(d => parseFloat(d.cost || 0).toFixed(4));
+
+      if (usageChart) usageChart.destroy();
+      usageChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Requests",
+              data: requests,
+              backgroundColor: "rgba(124, 58, 237, 0.7)",
+              borderColor: "#7C3AED",
+              borderWidth: 1,
+              borderRadius: 6,
+              yAxisID: "y",
+            },
+            {
+              label: "Cost ($)",
+              data: costs,
+              type: "line",
+              backgroundColor: "rgba(79, 209, 197, 0.1)",
+              borderColor: "#4FD1C5",
+              borderWidth: 2,
+              pointBackgroundColor: "#4FD1C5",
+              pointRadius: 4,
+              tension: 0.4,
+              fill: true,
+              yAxisID: "y1",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: "#E8E0FF", font: { family: "Inter" } } },
+            tooltip: { backgroundColor: "#1E1540", titleColor: "#E8E0FF", bodyColor: "#A89DC8" },
+          },
+          scales: {
+            x: { ticks: { color: "#A89DC8" }, grid: { color: "rgba(255,255,255,0.05)" } },
+            y: {
+              type: "linear", position: "left",
+              ticks: { color: "#A89DC8" },
+              grid: { color: "rgba(255,255,255,0.05)" },
+              title: { display: true, text: "Requests", color: "#A89DC8" },
+            },
+            y1: {
+              type: "linear", position: "right",
+              ticks: { color: "#4FD1C5", callback: v => "$" + v },
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: "Cost ($)", color: "#4FD1C5" },
+            },
+          },
+        },
+      });
+    }
+
+    // ── Render usage table ────────────────────────────────────────────────────
+    function renderUsageTable(data) {
+      const tbody = document.getElementById("usageTableBody");
+      if (!tbody) return;
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No usage data yet. Start using PocketDev!</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.slice().reverse().map(d => `
+        <tr>
+          <td>${d.date || "—"}</td>
+          <td>${d.requests || 0}</td>
+          <td>${((d.tokens || 0) / 1000).toFixed(1)}K</td>
+          <td>$${parseFloat(d.cost || 0).toFixed(5)}</td>
+        </tr>`).join("");
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────────────────
+    function showLoggedIn(user) {
+      document.querySelectorAll(".auth-logged-out").forEach(el => el.style.display = "none");
+      document.querySelectorAll(".auth-logged-in").forEach(el => el.style.display = "flex");
+      const avatars = document.querySelectorAll(".user-avatar");
+      avatars.forEach(el => {
+        el.src = user.photoURL || "assets/pocketdev-logo-512.png";
+        el.style.display = "block";
+      });
+      document.querySelectorAll(".user-display-name").forEach(el => {
+        el.textContent = user.displayName || user.email;
+      });
+      document.querySelectorAll(".user-email").forEach(el => {
+        el.textContent = user.email;
+      });
+    }
+
+    function showLoggedOut() {
+      document.querySelectorAll(".auth-logged-out").forEach(el => el.style.display = "flex");
+      document.querySelectorAll(".auth-logged-in").forEach(el => el.style.display = "none");
+      renderBalance(0);
+    }
+
+    function hideDashboard() {
+      document.getElementById("dashboardModal")?.classList.remove("open");
+    }
+
+    window.openDashboard = () => {
+      if (!currentUser) { window.signInWithGoogle(); return; }
+      document.getElementById("dashboardModal")?.classList.add("open");
+    };
+    window.closeDashboard = () => {
+      document.getElementById("dashboardModal")?.classList.remove("open");
+    };
+
+    // ── Toast notification ─────────────────────────────────────────────────────
+    function showToast(msg, type = "info") {
+      const container = document.getElementById("toastContainer");
+      if (!container) return;
+      const toast = document.createElement("div");
+      toast.className = `toast toast-${type}`;
+      toast.textContent = msg;
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.add("show"), 10);
+      setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // ── Expose to global ──────────────────────────────────────────────────────
+    window.PocketDev = { auth, currentUser: () => currentUser };
+  </script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --primary:   #5B21B6;
       --primary2:  #7C3AED;
+      --primary3:  #6D28D9;
       --accent:    #4338CA;
-      --green:     #4CAF50;
+      --teal:      #4FD1C5;
+      --green:     #10B981;
+      --red:       #EF4444;
+      --yellow:    #F59E0B;
       --dark:      #0D0A1A;
-      --dark2:     #1A1033;
-      --card:      #1E1540;
+      --dark2:     #110E23;
+      --dark3:     #160F2E;
+      --card:      #1A1235;
+      --card2:     #1E1540;
+      --border:    rgba(255,255,255,0.07);
       --text:      #E8E0FF;
       --muted:     #A89DC8;
+      --muted2:    #7B6CA8;
       --white:     #FFFFFF;
     }
 
     html { scroll-behavior: smooth; }
-
     body {
       font-family: 'Inter', sans-serif;
       background: var(--dark);
       color: var(--text);
       line-height: 1.6;
+      overflow-x: hidden;
     }
 
-    /* ── NAV ── */
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--dark); }
+    ::-webkit-scrollbar-thumb { background: var(--primary2); border-radius: 3px; }
+
+    /* ── TOAST ─────────────────────────────────────────────────────── */
+    #toastContainer {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .toast {
+      background: var(--card2); color: var(--text);
+      padding: 14px 20px; border-radius: 12px;
+      font-size: 14px; font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      border-left: 4px solid var(--primary2);
+      opacity: 0; transform: translateX(40px);
+      transition: all .3s ease; max-width: 340px;
+    }
+    .toast.show { opacity: 1; transform: translateX(0); }
+    .toast-success { border-left-color: var(--green); }
+    .toast-error   { border-left-color: var(--red); }
+    .toast-info    { border-left-color: var(--teal); }
+
+    /* ── NAV ───────────────────────────────────────────────────────── */
     nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 32px;
-      background: rgba(13,10,26,0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 14px 40px;
+      background: rgba(13,10,26,0.9);
+      backdrop-filter: blur(20px) saturate(160%);
+      border-bottom: 1px solid var(--border);
+      transition: all .3s;
     }
-    .nav-logo {
-      display: flex; align-items: center; gap: 10px; text-decoration: none;
-      transition: opacity .2s;
-    }
-    .nav-logo:hover { opacity: .92; }
-    .nav-logo .logo-img {
-      width: 42px; height: 42px; border-radius: 12px;
-      object-fit: cover;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
-    }
-    .nav-links { display: flex; gap: 28px; list-style: none; }
-    .nav-links a { color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color .2s; }
-    .nav-links a:hover { color: var(--white); }
-    .nav-cta {
-      background: linear-gradient(135deg, var(--primary2), var(--accent));
-      color: var(--white); border: none; padding: 10px 22px;
-      border-radius: 50px; font-size: 14px; font-weight: 600;
-      cursor: pointer; text-decoration: none; transition: opacity .2s;
-    }
-    .nav-cta:hover { opacity: .85; }
+    nav.scrolled { padding: 10px 40px; background: rgba(13,10,26,0.97); }
 
-    /* ── HERO ── */
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; transition: opacity .2s;
+    }
+    .nav-logo:hover { opacity: .9; }
+    .nav-logo .logo-img {
+      width: 40px; height: 40px; border-radius: 11px;
+      object-fit: cover; box-shadow: 0 4px 20px rgba(91,33,182,0.5);
+    }
+    .nav-logo-text { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; color: var(--white); }
+    .nav-logo-text span { color: var(--primary2); }
+
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .2s; }
+    .nav-links a:hover { color: var(--white); }
+
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+
+    .nav-balance-pill {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(91,33,182,0.2); border: 1px solid rgba(124,58,237,0.3);
+      padding: 6px 14px; border-radius: 50px; font-size: 13px; font-weight: 600;
+      color: var(--text); cursor: pointer; transition: all .2s;
+    }
+    .nav-balance-pill:hover { background: rgba(91,33,182,0.35); }
+    .nav-balance-pill .balance-icon { font-size: 14px; }
+
+    .nav-signin-btn {
+      background: linear-gradient(135deg, var(--primary2), var(--accent));
+      color: var(--white); border: none; padding: 9px 20px;
+      border-radius: 50px; font-size: 13px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all .2s;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .nav-signin-btn:hover { opacity: .88; transform: translateY(-1px); }
+
+    .user-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      object-fit: cover; border: 2px solid var(--primary2);
+      cursor: pointer; transition: all .2s;
+    }
+    .user-avatar:hover { border-color: var(--teal); transform: scale(1.05); }
+
+    .auth-logged-in { display: none; align-items: center; gap: 10px; }
+    .auth-logged-out { display: flex; align-items: center; gap: 10px; }
+
+    /* ── DASHBOARD MODAL ─────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
+      opacity: 0; pointer-events: none; transition: opacity .3s;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .dashboard-modal {
+      background: var(--dark2); border: 1px solid var(--border);
+      border-radius: 24px; width: 100%; max-width: 900px; max-height: 90vh;
+      overflow-y: auto; box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+      transform: translateY(20px); transition: transform .3s;
+    }
+    .modal-overlay.open .dashboard-modal { transform: translateY(0); }
+
+    .dashboard-header {
+      padding: 28px 32px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .dashboard-title { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; }
+    .dashboard-close {
+      background: rgba(255,255,255,0.08); border: none; color: var(--muted);
+      width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+      font-size: 18px; display: flex; align-items: center; justify-content: center;
+      transition: all .2s;
+    }
+    .dashboard-close:hover { background: rgba(255,255,255,0.15); color: var(--white); }
+
+    .dashboard-body { padding: 28px 32px; }
+
+    /* Profile row */
+    .profile-row {
+      display: flex; align-items: center; gap: 16px; margin-bottom: 28px;
+      padding: 20px; background: var(--card); border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+    .profile-row img { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--primary2); }
+    .profile-info { flex: 1; }
+    .profile-name { font-size: 18px; font-weight: 700; color: var(--white); }
+    .profile-email { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .signout-btn {
+      background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+      color: #FCA5A5; padding: 8px 16px; border-radius: 8px;
+      font-size: 13px; cursor: pointer; transition: all .2s; font-weight: 500;
+    }
+    .signout-btn:hover { background: rgba(239,68,68,0.25); }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .stat-card.balance::before { background: linear-gradient(90deg, var(--primary2), var(--teal)); }
+    .stat-card.requests::before { background: linear-gradient(90deg, var(--green), var(--teal)); }
+    .stat-card.tokens::before { background: linear-gradient(90deg, var(--yellow), var(--primary2)); }
+
+    .stat-icon { font-size: 28px; margin-bottom: 8px; }
+    .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+    .stat-value { font-size: 26px; font-weight: 800; color: var(--white); font-family: 'Space Grotesk', sans-serif; margin-top: 4px; }
+    .stat-value.balance-display { color: var(--teal); }
+
+    /* Balance bar */
+    .balance-bar { background: rgba(255,255,255,0.1); border-radius: 50px; height: 6px; margin-top: 10px; overflow: hidden; }
+    .balance-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary2), var(--teal)); border-radius: 50px; transition: width .8s ease; width: 0%; }
+
+    /* Chart section */
+    .chart-section {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px; margin-bottom: 24px;
+    }
+    .section-title { font-size: 16px; font-weight: 700; color: var(--white); margin-bottom: 16px; }
+
+    /* Usage table */
+    .usage-table { width: 100%; border-collapse: collapse; }
+    .usage-table th {
+      text-align: left; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--muted); padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .usage-table td {
+      padding: 10px 12px; font-size: 13px; color: var(--text);
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .usage-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .table-empty { text-align: center; color: var(--muted); padding: 24px !important; }
+
+    /* ── HERO ──────────────────────────────────────────────────────── */
     .hero {
       min-height: 100vh;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      text-align: center; padding: 120px 24px 80px;
-      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(91,33,182,0.35) 0%, transparent 70%);
+      text-align: center; padding: 140px 24px 100px;
+      background: radial-gradient(ellipse 90% 70% at 50% -5%, rgba(91,33,182,0.4) 0%, transparent 65%);
       position: relative; overflow: hidden;
     }
     .hero::before {
       content: '';
       position: absolute; inset: 0;
-      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%235B21B6' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%235B21B6' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      opacity: .6;
     }
+
+    /* Floating particles */
+    .particles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .particle {
+      position: absolute; border-radius: 50%;
+      background: rgba(124, 58, 237, 0.3);
+      animation: float linear infinite;
+    }
+    @keyframes float {
+      0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(-100px) rotate(720deg); opacity: 0; }
+    }
+
     .hero-badge {
       display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4);
-      color: var(--green); padding: 6px 16px; border-radius: 50px;
-      font-size: 13px; font-weight: 600; margin-bottom: 28px;
-      animation: fadeUp .6s ease both;
+      background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3);
+      padding: 8px 18px; border-radius: 50px; font-size: 13px; font-weight: 600;
+      color: var(--primary2); margin-bottom: 28px;
+      animation: pulse-border 3s ease-in-out infinite;
     }
-    .hero-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(124,58,237,.3); box-shadow: none; }
+      50% { border-color: rgba(124,58,237,.6); box-shadow: 0 0 20px rgba(124,58,237,.2); }
+    }
+    .badge-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: blink 1.5s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
 
     .hero h1 {
-      font-size: clamp(36px, 7vw, 72px);
-      font-weight: 900; line-height: 1.1; letter-spacing: -2px;
-      color: var(--white); margin-bottom: 20px;
-      animation: fadeUp .7s ease .1s both;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(42px, 7vw, 82px);
+      font-weight: 800; line-height: 1.08;
+      letter-spacing: -2px; color: var(--white); margin-bottom: 24px;
+      position: relative; z-index: 1;
     }
-    .hero h1 span {
-      background: linear-gradient(135deg, #A78BFA, #818CF8);
+    .hero h1 .gradient-text {
+      background: linear-gradient(135deg, #A78BFA, var(--teal), #F59E0B);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient-shift 4s ease-in-out infinite alternate;
+      background-size: 200% auto;
     }
+    @keyframes gradient-shift {
+      0% { background-position: 0%; }
+      100% { background-position: 100%; }
+    }
+
     .hero p {
       font-size: clamp(16px, 2.5vw, 20px); color: var(--muted);
-      max-width: 680px; margin: 0 auto 40px;
-      animation: fadeUp .7s ease .2s both;
+      max-width: 640px; margin: 0 auto 40px;
+      position: relative; z-index: 1;
     }
+
     .hero-buttons {
-      display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
-      animation: fadeUp .7s ease .3s both;
+      display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+      position: relative; z-index: 1; margin-bottom: 60px;
     }
     .btn-primary {
-      display: inline-flex; align-items: center; gap: 10px;
       background: linear-gradient(135deg, var(--primary2), var(--accent));
-      color: var(--white); text-decoration: none;
-      padding: 16px 32px; border-radius: 50px;
-      font-size: 16px; font-weight: 700;
+      color: var(--white); border: none; padding: 14px 28px;
+      border-radius: 50px; font-size: 15px; font-weight: 700;
+      cursor: pointer; text-decoration: none; transition: all .25s;
+      display: flex; align-items: center; gap: 8px;
       box-shadow: 0 8px 32px rgba(124,58,237,0.4);
-      transition: transform .2s, box-shadow .2s;
     }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,58,237,0.55); }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,58,237,0.55); opacity: .95; }
+
     .btn-secondary {
-      display: inline-flex; align-items: center; gap: 10px;
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
-      color: var(--white); text-decoration: none;
-      padding: 16px 32px; border-radius: 50px;
-      font-size: 16px; font-weight: 600;
-      transition: background .2s;
+      background: rgba(255,255,255,0.06); color: var(--text);
+      border: 1px solid var(--border); padding: 14px 28px;
+      border-radius: 50px; font-size: 15px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all .25s;
+      display: flex; align-items: center; gap: 8px;
     }
-    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); transform: translateY(-2px); }
 
-    .hero-buttons-dual {
-      display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
-      align-items: stretch; max-width: 720px; margin-left: auto; margin-right: auto;
+    .btn-google {
+      background: var(--white); color: #1f1f1f;
+      border: none; padding: 14px 28px; border-radius: 50px;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; gap: 10px; transition: all .25s;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
     }
-    .btn-play-hero {
-      display: inline-flex; align-items: center; gap: 14px;
-      background: #fff; color: #111;
-      padding: 18px 26px; border-radius: 16px;
-      text-decoration: none;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
-      flex: 1; min-width: 240px; max-width: 360px;
-      justify-content: flex-start;
-      transition: transform .2s, box-shadow .2s;
-    }
-    .btn-play-hero:hover { transform: translateY(-3px); box-shadow: 0 14px 44px rgba(0,0,0,0.45); }
-    .btn-play-hero .gplay-icon {
-      width: 40px; height: 40px; border-radius: 10px;
-      background: linear-gradient(135deg,#00C853,#00A844);
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 20px; flex-shrink: 0;
-    }
-    .btn-play-hero .btn-lines small {
-      display: block; font-size: 12px; font-weight: 700; color: #1a73e8;
-      letter-spacing: .04em; text-transform: uppercase;
-    }
-    .btn-play-hero .btn-lines strong {
-      display: block; font-size: 18px; font-weight: 900; color: #111; margin-top: 4px;
-      letter-spacing: -0.3px;
-    }
-    .btn-apk-hero {
-      display: inline-flex; align-items: center; gap: 14px;
-      background: linear-gradient(160deg, #2E7D32, #1B5E20);
-      border: 1px solid rgba(255,255,255,0.12);
-      color: #fff; padding: 18px 26px; border-radius: 16px;
-      text-decoration: none;
-      flex: 1; min-width: 240px; max-width: 360px;
-      justify-content: flex-start;
-      transition: transform .2s, opacity .2s;
-      opacity: 0.95;
-    }
-    .btn-apk-hero:hover { transform: translateY(-2px); opacity: 1; }
-    .btn-apk-hero .apk-icon {
-      width: 40px; height: 40px; border-radius: 10px;
-      background: rgba(255,255,255,0.15);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; flex-shrink: 0;
-    }
-    .btn-apk-hero .btn-lines small {
-      display: block; font-size: 11px; font-weight: 600; opacity: 0.9;
-    }
-    .btn-apk-hero .btn-lines strong {
-      display: block; font-size: 18px; font-weight: 900; margin-top: 4px;
-    }
+    .btn-google:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .google-icon { width: 20px; height: 20px; }
 
-    .hero-note {
-      margin-top: 20px; font-size: 13px; color: var(--muted);
-      animation: fadeUp .7s ease .4s both;
+    /* Hero stats */
+    .hero-stats {
+      display: flex; gap: 40px; justify-content: center; flex-wrap: wrap;
+      position: relative; z-index: 1;
     }
-    .hero-note strong { color: var(--green); }
+    .hero-stat { text-align: center; }
+    .hero-stat-value {
+      font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 800;
+      color: var(--white); line-height: 1;
+    }
+    .hero-stat-value .accent { color: var(--teal); }
+    .hero-stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
 
-    /* Phone mockup */
-    .phone-wrap {
-      margin-top: 64px; position: relative;
-      animation: fadeUp .8s ease .5s both;
+    /* ── SECTION COMMON ───────────────────────────────────────────── */
+    section {
+      padding: 100px 24px;
+      max-width: 1200px; margin: 0 auto;
     }
-    .phone {
-      width: 240px; height: 480px;
-      background: linear-gradient(160deg, #1E1540, #0D0A1A);
-      border-radius: 36px; border: 2px solid rgba(255,255,255,0.1);
-      box-shadow: 0 32px 80px rgba(91,33,182,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 12px; padding: 24px; margin: 0 auto;
+    .section-tag {
+      display: inline-block;
+      background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.3);
+      color: var(--primary2); font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 2px;
+      padding: 5px 14px; border-radius: 50px; margin-bottom: 16px;
     }
-    .phone .phone-logo {
-      width: 72px; height: 72px; border-radius: 18px; object-fit: cover;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    .section-heading {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(30px, 5vw, 52px); font-weight: 800;
+      color: var(--white); line-height: 1.1; margin-bottom: 16px;
     }
-    .phone-screen-title { font-size: 22px; font-weight: 900; color: #A78BFA; }
-    .phone-screen-sub { font-size: 12px; color: var(--muted); }
-    .phone-field {
-      width: 100%; height: 40px; border-radius: 50px;
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
-    }
-    .phone-btn-main {
-      width: 100%; height: 42px; border-radius: 50px;
-      background: linear-gradient(135deg, #7C3AED, #4338CA);
-    }
-    .phone-btn-google {
-      width: 100%; height: 42px; border-radius: 50px;
-      background: transparent; border: 2px solid #4CAF50;
-      display: flex; align-items: center; justify-content: center;
-      gap: 8px; font-size: 12px; color: var(--text); font-weight: 600;
-    }
-    .phone-glow {
-      position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%);
-      width: 200px; height: 80px;
-      background: radial-gradient(ellipse, rgba(124,58,237,0.6), transparent 70%);
-      filter: blur(20px);
-    }
+    .section-sub { font-size: 18px; color: var(--muted); max-width: 620px; line-height: 1.65; }
 
-    @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-
-    /* ── STATS ── */
-    .stats {
-      display: flex; justify-content: center; flex-wrap: wrap; gap: 0;
-      background: rgba(255,255,255,0.03); border-top: 1px solid rgba(255,255,255,0.06);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .stat {
-      flex: 1; min-width: 160px; text-align: center;
-      padding: 32px 20px; border-right: 1px solid rgba(255,255,255,0.06);
-    }
-    .stat:last-child { border-right: none; }
-    .stat-num { font-size: 36px; font-weight: 900; color: var(--white); line-height: 1; }
-    .stat-num span { background: linear-gradient(135deg,#A78BFA,#818CF8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-    .stat-label { font-size: 14px; color: var(--muted); margin-top: 6px; }
-
-    /* ── SECTION COMMON ── */
-    section { padding: 96px 24px; }
-    .section-label {
-      display: inline-block; background: rgba(124,58,237,0.15);
-      border: 1px solid rgba(124,58,237,0.4); color: #A78BFA;
-      padding: 5px 14px; border-radius: 50px; font-size: 12px;
-      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      margin-bottom: 16px;
-    }
-    .section-title { font-size: clamp(28px,4vw,44px); font-weight: 900; color: var(--white); line-height: 1.15; margin-bottom: 14px; }
-    .section-sub { font-size: 17px; color: var(--muted); max-width: 520px; }
-    .centered { text-align: center; }
-    .centered .section-sub { margin: 0 auto; }
-
-    /* ── FEATURES ── */
-    #features { background: var(--dark2); }
+    /* ── FEATURES ──────────────────────────────────────────────────── */
+    .features-header { text-align: center; margin-bottom: 64px; }
     .features-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px; max-width: 1100px; margin: 56px auto 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
     }
     .feature-card {
-      background: var(--card); border: 1px solid rgba(255,255,255,0.07);
+      background: var(--card); border: 1px solid var(--border);
       border-radius: 20px; padding: 28px;
-      transition: transform .2s, border-color .2s;
+      transition: all .3s; position: relative; overflow: hidden;
+      cursor: default;
     }
-    .feature-card:hover { transform: translateY(-4px); border-color: rgba(124,58,237,0.4); }
+    .feature-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,58,237,.6), transparent);
+      opacity: 0; transition: opacity .3s;
+    }
+    .feature-card:hover {
+      border-color: rgba(124,58,237,.4); transform: translateY(-4px);
+      box-shadow: 0 20px 48px rgba(0,0,0,.4);
+    }
+    .feature-card:hover::before { opacity: 1; }
+
     .feature-icon {
-      width: 52px; height: 52px; border-radius: 14px;
-      background: linear-gradient(135deg, rgba(124,58,237,0.3), rgba(67,56,202,0.3));
+      width: 56px; height: 56px; border-radius: 14px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 24px; margin-bottom: 18px;
+      font-size: 26px; margin-bottom: 18px;
+      background: rgba(124,58,237,.15);
     }
-    .feature-card h3 { font-size: 18px; font-weight: 700; color: var(--white); margin-bottom: 10px; }
-    .feature-card p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+    .feature-title { font-size: 18px; font-weight: 700; color: var(--white); margin-bottom: 10px; }
+    .feature-desc { font-size: 14px; color: var(--muted); line-height: 1.65; }
+    .feature-badge {
+      display: inline-block; margin-top: 14px;
+      background: rgba(79,209,197,.12); color: var(--teal);
+      border: 1px solid rgba(79,209,197,.25); padding: 3px 10px;
+      border-radius: 50px; font-size: 11px; font-weight: 600;
+    }
 
-    /* ── HOW IT WORKS ── */
-    .steps { display: flex; flex-direction: column; gap: 0; max-width: 640px; margin: 56px auto 0; }
-    .step { display: flex; gap: 24px; padding: 0 0 40px; position: relative; }
-    .step::before {
-      content: ''; position: absolute; left: 20px; top: 48px; bottom: 0;
-      width: 2px; background: linear-gradient(to bottom, rgba(124,58,237,0.5), transparent);
+    /* ── DASHBOARD PREVIEW SECTION ────────────────────────────────── */
+    .dashboard-preview {
+      background: var(--dark3);
+      border-radius: 28px; border: 1px solid var(--border);
+      padding: 40px; position: relative; overflow: hidden;
     }
-    .step:last-child::before { display: none; }
+    .dashboard-preview::before {
+      content: ''; position: absolute; top: -50%; right: -20%;
+      width: 500px; height: 500px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(91,33,182,.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .preview-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px;
+    }
+    .preview-card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 12px; }
+    .preview-balance {
+      font-family: 'Space Grotesk', sans-serif; font-size: 36px; font-weight: 800;
+      color: var(--teal);
+    }
+    .preview-bar { background: rgba(255,255,255,.1); border-radius: 50px; height: 8px; margin-top: 12px; }
+    .preview-bar-fill { height: 100%; border-radius: 50px; background: linear-gradient(90deg, var(--primary2), var(--teal)); width: 65%; }
+
+    .mini-chart { height: 80px; display: flex; align-items: flex-end; gap: 6px; margin-top: 8px; }
+    .mini-bar { flex: 1; border-radius: 4px 4px 0 0; background: rgba(124,58,237,.4); transition: height .3s; }
+
+    /* ── HOW IT WORKS ─────────────────────────────────────────────── */
+    .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
+    .step {
+      text-align: center; padding: 32px 24px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+      position: relative; transition: all .3s;
+    }
+    .step:hover { border-color: rgba(124,58,237,.4); transform: translateY(-4px); }
     .step-num {
-      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      width: 52px; height: 52px; border-radius: 50%;
       background: linear-gradient(135deg, var(--primary2), var(--accent));
+      color: var(--white); font-size: 20px; font-weight: 800;
       display: flex; align-items: center; justify-content: center;
-      font-weight: 900; font-size: 15px; color: var(--white);
+      margin: 0 auto 18px;
+      box-shadow: 0 8px 24px rgba(124,58,237,.4);
     }
-    .step h3 { font-size: 18px; font-weight: 700; color: var(--white); margin-bottom: 8px; }
-    .step p { font-size: 14px; color: var(--muted); }
+    .step-title { font-size: 17px; font-weight: 700; color: var(--white); margin-bottom: 10px; }
+    .step-desc { font-size: 14px; color: var(--muted); line-height: 1.6; }
 
-    /* ── PRICING ── */
-    #pricing { background: var(--dark2); }
-    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 20px; max-width: 900px; margin: 56px auto 0; }
+    .connector {
+      display: none;
+      position: absolute; right: -20px; top: 50%; transform: translateY(-50%);
+      color: var(--muted2); font-size: 24px;
+    }
+
+    /* ── PRICING ───────────────────────────────────────────────────── */
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
     .pricing-card {
-      background: var(--card); border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 24px; padding: 36px 32px; text-align: center;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 24px; padding: 32px;
+      transition: all .3s; position: relative;
     }
     .pricing-card.featured {
-      border-color: var(--primary2);
-      background: linear-gradient(160deg, rgba(124,58,237,0.2), var(--card));
-      position: relative;
+      border-color: rgba(124,58,237,.5);
+      background: linear-gradient(135deg, rgba(91,33,182,.15), rgba(67,56,202,.1));
+      box-shadow: 0 24px 60px rgba(0,0,0,.4), 0 0 0 1px rgba(124,58,237,.3);
     }
     .pricing-badge {
-      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-      background: linear-gradient(135deg, var(--primary2), var(--accent));
-      color: var(--white); padding: 4px 18px; border-radius: 50px;
-      font-size: 12px; font-weight: 700; white-space: nowrap;
+      display: inline-block; background: linear-gradient(135deg, var(--primary2), var(--accent));
+      color: var(--white); font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; padding: 5px 14px; border-radius: 50px; margin-bottom: 16px;
     }
-    .pricing-name { font-size: 16px; font-weight: 700; color: var(--muted); margin-bottom: 12px; }
-    .pricing-price { font-size: 48px; font-weight: 900; color: var(--white); line-height: 1; }
-    .pricing-price sup { font-size: 22px; vertical-align: top; margin-top: 10px; }
-    .pricing-price sub { font-size: 14px; color: var(--muted); }
-    .pricing-desc { font-size: 13px; color: var(--muted); margin: 12px 0 24px; }
-    .pricing-features { list-style: none; text-align: left; margin-bottom: 28px; }
-    .pricing-features li { font-size: 14px; color: var(--text); padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; }
-    .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .pricing-name { font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .pricing-price {
+      font-family: 'Space Grotesk', sans-serif; font-size: 52px; font-weight: 800;
+      color: var(--white); line-height: 1; margin-bottom: 12px;
+    }
+    .pricing-price sup { font-size: 24px; vertical-align: top; margin-top: 10px; }
+    .pricing-price sub { font-size: 18px; color: var(--muted); }
+    .pricing-desc { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+    .pricing-features { list-style: none; margin-bottom: 28px; }
+    .pricing-features li {
+      padding: 9px 0; font-size: 14px; color: var(--text);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; }
     .pricing-btn {
-      display: block; width: 100%; padding: 14px;
-      border-radius: 50px; font-size: 15px; font-weight: 700;
-      text-decoration: none; transition: opacity .2s;
+      display: block; text-align: center; padding: 14px; border-radius: 50px;
+      font-size: 14px; font-weight: 700; text-decoration: none; transition: all .2s; cursor: pointer; border: none;
     }
-    .pricing-btn.outline { border: 2px solid rgba(255,255,255,0.2); color: var(--white); }
-    .pricing-btn.fill { background: linear-gradient(135deg, var(--primary2), var(--accent)); color: var(--white); }
-    .pricing-btn:hover { opacity: .8; }
+    .pricing-btn.fill {
+      background: linear-gradient(135deg, var(--primary2), var(--accent));
+      color: var(--white); box-shadow: 0 8px 24px rgba(124,58,237,.4);
+    }
+    .pricing-btn.fill:hover { opacity: .88; transform: translateY(-2px); }
+    .pricing-btn.outline {
+      border: 2px solid var(--border); color: var(--text); background: transparent;
+    }
+    .pricing-btn.outline:hover { border-color: var(--primary2); color: var(--white); }
+    .pricing-btn.google {
+      background: var(--white); color: #1f1f1f;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .pricing-btn.google:hover { opacity: .9; transform: translateY(-2px); }
 
-    /* ── PORTFOLIO / DOWNLOAD CARDS ── */
-    #portfolio { background: var(--dark); border-top: 1px solid rgba(255,255,255,0.06); }
-    .portfolio-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 24px; max-width: 960px; margin: 48px auto 0;
-    }
-    .portfolio-card {
-      background: var(--card); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 24px; padding: 32px 28px;
-      display: flex; flex-direction: column; align-items: flex-start;
-      transition: transform .2s, border-color .2s, box-shadow .2s;
-      text-align: left;
-    }
-    .portfolio-card:hover { transform: translateY(-4px); border-color: rgba(124,58,237,0.35); }
-    .portfolio-card.featured {
-      border-color: rgba(76,175,80,0.45);
-      background: linear-gradient(165deg, rgba(76,175,80,0.12), var(--card));
-      box-shadow: 0 20px 60px rgba(76,175,80,0.08);
-    }
-    .portfolio-card .card-badge {
-      display: inline-block; font-size: 11px; font-weight: 800;
-      letter-spacing: .08em; text-transform: uppercase;
-      padding: 5px 12px; border-radius: 50px; margin-bottom: 16px;
-    }
-    .portfolio-card.featured .card-badge {
-      background: rgba(76,175,80,0.25); color: var(--green); border: 1px solid rgba(76,175,80,0.4);
-    }
-    .portfolio-card.alt .card-badge {
-      background: rgba(255,255,255,0.08); color: var(--muted); border: 1px solid rgba(255,255,255,0.12);
-    }
-    .portfolio-card h3 { font-size: 22px; font-weight: 800; color: var(--white); margin-bottom: 10px; line-height: 1.25; }
-    .portfolio-card p { font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 20px; flex: 1; }
-    .portfolio-card .card-actions { width: 100%; margin-top: auto; }
-    .btn-play {
-      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; padding: 16px 22px; border-radius: 14px;
-      background: var(--white); color: #111; text-decoration: none;
-      font-weight: 800; font-size: 15px; transition: transform .2s, box-shadow .2s;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.25);
-    }
-    .btn-play:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
-    .btn-play small { display: block; font-size: 11px; font-weight: 600; opacity: .65; margin-top: 2px; }
-    .btn-apk {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 100%; padding: 14px 20px; border-radius: 14px;
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
-      color: var(--text); text-decoration: none; font-weight: 700; font-size: 14px;
-      transition: background .2s;
-    }
-    .btn-apk:hover { background: rgba(255,255,255,0.12); }
-    .iap-notice {
-      margin-top: 16px; padding: 14px 16px; border-radius: 12px;
-      background: rgba(255,193,7,0.08); border: 1px solid rgba(255,193,7,0.25);
-      font-size: 12px; color: #E8D4A8; line-height: 1.55;
-    }
-    .iap-notice strong { color: #FFE082; }
-
-    /* ── DOWNLOAD CTA (secondary) ── */
-    #download {
+    /* ── DOWNLOAD SECTION ─────────────────────────────────────────── */
+    .download-section {
       text-align: center;
-      background: linear-gradient(135deg, rgba(91,33,182,0.3), rgba(67,56,202,0.2));
-      border-top: 1px solid rgba(255,255,255,0.06);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(91,33,182,.2) 0%, transparent 70%);
+      padding: 100px 24px;
     }
-    #download h2 { font-size: clamp(28px,4vw,48px); font-weight: 900; color: var(--white); margin-bottom: 14px; }
-    #download .lead { font-size: 17px; color: var(--muted); margin-bottom: 8px; max-width: 640px; margin-left: auto; margin-right: auto; }
-    #download .sub { font-size: 14px; color: var(--muted); margin-bottom: 32px; opacity: .9; }
 
-    /* ── FOOTER ── */
+    /* ── FOOTER ───────────────────────────────────────────────────── */
     footer {
-      background: #080612; padding: 48px 24px 32px;
-      border-top: 1px solid rgba(255,255,255,0.06);
+      background: var(--dark2); border-top: 1px solid var(--border);
+      padding: 64px 0 32px;
     }
-    .footer-inner { max-width: 1100px; margin: 0 auto; }
-    .footer-top { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 40px; margin-bottom: 40px; }
-    .footer-brand .footer-logo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
-    .footer-brand .footer-logo-img {
-      width: 52px; height: 52px; border-radius: 14px; object-fit: cover;
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
-    }
-    .footer-brand .logo-text { font-size: 20px; font-weight: 900; color: var(--white); letter-spacing: -0.3px; }
-    .footer-brand p { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 260px; }
-    .footer-col h4 { font-size: 13px; font-weight: 700; color: var(--white); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+    .footer-inner { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
+    .footer-top { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 48px; }
+    .footer-brand p { font-size: 14px; color: var(--muted); margin-top: 12px; line-height: 1.7; max-width: 260px; }
+    .footer-logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 0; }
+    .footer-logo-img { width: 42px; height: 42px; border-radius: 11px; }
+    .footer-logo-text { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; color: var(--white); }
+    .footer-col h4 { font-size: 14px; font-weight: 700; color: var(--white); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
     .footer-col a { display: block; font-size: 14px; color: var(--muted); text-decoration: none; margin-bottom: 10px; transition: color .2s; }
     .footer-col a:hover { color: var(--white); }
-    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 24px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-    .footer-bottom p { font-size: 13px; color: var(--muted); }
-    .footer-bottom a { color: var(--muted); text-decoration: none; }
-    .footer-bottom a:hover { color: var(--white); }
+    .footer-bottom {
+      border-top: 1px solid var(--border); padding-top: 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px;
+    }
+    .footer-bottom p, .footer-bottom a { font-size: 13px; color: var(--muted2); text-decoration: none; }
+    .footer-bottom a:hover { color: var(--muted); }
 
-    /* ── MOBILE ── */
-    @media (max-width: 680px) {
-      nav { padding: 14px 20px; }
+    /* ── ANIMATED SECTION DIVIDER ─────────────────────────────────── */
+    .section-divider {
+      width: 60px; height: 4px; border-radius: 2px;
+      background: linear-gradient(90deg, var(--primary2), var(--teal));
+      margin: 16px 0 40px;
+    }
+    .section-divider.center { margin: 16px auto 40px; }
+
+    /* ── MOBILE ───────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      nav { padding: 12px 20px; }
       .nav-links { display: none; }
-      .hero { padding: 100px 20px 60px; }
-      .stat { min-width: 50%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06); }
-      section { padding: 64px 20px; }
-      .footer-top { flex-direction: column; }
-      .footer-bottom { flex-direction: column; text-align: center; }
+      .dashboard-body { padding: 20px; }
+      .dashboard-header { padding: 20px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .footer-top { grid-template-columns: 1fr 1fr; }
+      .preview-grid { grid-template-columns: 1fr; }
+      .hero h1 { letter-spacing: -1px; }
+    }
+    @media (max-width: 480px) {
+      .footer-top { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .hero-buttons { flex-direction: column; align-items: center; }
     }
   </style>
 </head>
-<body>
 
-<!-- ── NAV ── -->
-<nav>
-  <a class="nav-logo" href="/" aria-label="PocketDev home">
-    <img class="logo-img" src="assets/pocketdev-logo-512.png" alt="" width="42" height="42" decoding="async" />
+<body>
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
+<!-- ═══════════════════ NAV ═══════════════════ -->
+<nav id="mainNav">
+  <a class="nav-logo" href="#">
+    <img class="logo-img" src="assets/pocketdev-logo-512.png" alt="PocketDev" width="40" height="40" decoding="async" />
+    <span class="nav-logo-text">Pocket<span>Dev</span></span>
   </a>
+
   <ul class="nav-links">
     <li><a href="#features">Features</a></li>
-    <li><a href="#how">How it works</a></li>
+    <li><a href="#dashboard-preview">Dashboard</a></li>
+    <li><a href="#how">How it Works</a></li>
     <li><a href="#pricing">Pricing</a></li>
-    <li><a href="#portfolio">Download</a></li>
-    <li><a href="privacy.html">Privacy</a></li>
+    <li><a href="#download">Download</a></li>
   </ul>
-  <a class="nav-cta" href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer">Install Now</a>
+
+  <div class="nav-right">
+    <!-- Logged out state -->
+    <div class="auth-logged-out">
+      <button class="nav-signin-btn" onclick="window.signInWithGoogle()">
+        <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign in with Google
+      </button>
+    </div>
+
+    <!-- Logged in state -->
+    <div class="auth-logged-in">
+      <div class="nav-balance-pill" onclick="window.openDashboard()">
+        <span class="balance-icon">💰</span>
+        <span class="balance-display">$0.0000</span>
+      </div>
+      <img class="user-avatar" src="assets/pocketdev-logo-512.png" alt="Profile" onclick="window.openDashboard()" />
+    </div>
+  </div>
 </nav>
 
-<!-- ── HERO ── -->
-<section class="hero">
-  <div class="hero-badge">
-    <span class="dot"></span>
-    DOWNLOAD
-  </div>
-  <h1>Start building <span>today</span></h1>
-  <p>Free to download. <strong>$5 credits</strong> on signup. No credit card required. Build apps and code, edit &amp; generate images with AI, and create <strong>ultra-realistic video</strong> from text or <strong>voice</strong> — then share and surprise anyone. Best for developers <em>and</em> content creators.</p>
-  <div class="hero-buttons hero-buttons-dual">
-    <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="btn-play-hero" target="_blank" rel="noopener noreferrer">
-      <span class="gplay-icon">▶</span>
-      <span class="btn-lines">
-        <small>Install Now</small>
-        <strong>Google Play</strong>
-      </span>
-    </a>
-    <a href="releases/PocketDev_AI_Android_V4.9.4.apk" class="btn-apk-hero" download>
-      <span class="apk-icon">📦</span>
-      <span class="btn-lines">
-        <small>Direct download (advanced)</small>
-        <strong>Download APK</strong>
-      </span>
-    </a>
-  </div>
-  <p class="hero-note">✓ <strong>Prefer Google Play</strong> — wallet top-ups &amp; in-app purchases use Google Play Billing and <strong>do not work</strong> the same on sideloaded APKs. &nbsp;·&nbsp; <strong>$5 free credits</strong> &nbsp;·&nbsp; Android 8.0+ &nbsp;·&nbsp; ~15MB &nbsp;·&nbsp; No ads</p>
+<!-- ═══════════════════ DASHBOARD MODAL ═══════════════════ -->
+<div class="modal-overlay" id="dashboardModal" onclick="if(event.target===this)window.closeDashboard()">
+  <div class="dashboard-modal">
+    <div class="dashboard-header">
+      <div class="dashboard-title">⚡ My Dashboard</div>
+      <button class="dashboard-close" onclick="window.closeDashboard()">✕</button>
+    </div>
+    <div class="dashboard-body">
 
-  <!-- Phone mockup -->
-  <div class="phone-wrap">
-    <div class="phone">
-      <img class="phone-logo" src="assets/pocketdev-logo-512.png" alt="" width="72" height="72" decoding="async" />
-      <div class="phone-screen-title">PocketDev</div>
-      <div class="phone-screen-sub">AI development assistant</div>
-      <div class="phone-field"></div>
-      <div class="phone-field"></div>
-      <div class="phone-btn-main"></div>
-      <div class="phone-btn-google">🔵 Continue with Google</div>
-    </div>
-    <div class="phone-glow"></div>
-  </div>
-</section>
-
-<!-- ── STATS ── -->
-<div class="stats">
-  <div class="stat">
-    <div class="stat-num"><span>AI</span></div>
-    <div class="stat-label">Code · images · video · voice</div>
-  </div>
-  <div class="stat">
-    <div class="stat-num"><span>$5</span></div>
-    <div class="stat-label">Free credits on signup</div>
-  </div>
-  <div class="stat">
-    <div class="stat-num"><span>∞</span></div>
-    <div class="stat-label">Projects you can build</div>
-  </div>
-  <div class="stat">
-    <div class="stat-num"><span>📱</span></div>
-    <div class="stat-label">100% mobile — no laptop needed</div>
-  </div>
-</div>
-
-<!-- ── FEATURES ── -->
-<section id="features">
-  <div class="centered">
-    <span class="section-label">Features</span>
-    <h2 class="section-title">Code, images &amp; video —<br />in one pocket studio</h2>
-    <p class="section-sub">PocketDev packs AI development, creative tools, and sharing into your Android phone.</p>
-  </div>
-  <div class="features-grid">
-    <div class="feature-card">
-      <div class="feature-icon">🖼️</div>
-      <h3>AI Image Studio</h3>
-      <p>Enhance, modify, and rebuild powerful images from prompts. Iterate fast until the look is exactly yours.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🎬</div>
-      <h3>Video from prompts or voice</h3>
-      <p>Create ultra-realistic clips with AI — type what you want or say it out loud. Built for reels, shorts, and storytellers.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🚀</div>
-      <h3>Share &amp; surprise</h3>
-      <p>Export with PocketDev branding and drop your Play link — charm friends, clients, or your feed in one tap.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🤖</div>
-      <h3>AI Code Generation</h3>
-      <p>Describe what you want to build and let AI write the code. Supports Android, web, Python, and more.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">📁</div>
-      <h3>Project Manager</h3>
-      <p>Organize all your projects in one place. Create, import, search, and manage files directly on your phone.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">✏️</div>
-      <h3>Code Editor</h3>
-      <p>A full-featured mobile code editor with syntax highlighting, smart suggestions, and file management.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">📸</div>
-      <h3>Camera AI</h3>
-      <p>Point your camera at a UI sketch or wireframe and let AI generate the code from your photo.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">💬</div>
-      <h3>AI Prompt Workspace</h3>
-      <p>Chat with AI to refine your code, debug issues, explain concepts, and iterate on your projects.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">💰</div>
-      <h3>Pay-As-You-Go Wallet</h3>
-      <p>Top up only what you need. No subscriptions. Start free with $5 credits, pay only when you use AI.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ── PORTFOLIO: GET THE APP ── -->
-<section id="portfolio">
-  <div class="centered">
-    <span class="section-label">Get the app</span>
-    <h2 class="section-title">Download PocketDev</h2>
-    <p class="section-sub">We recommend Google Play for the full experience — including secure in-app purchases and automatic updates.</p>
-  </div>
-  <div class="portfolio-grid">
-    <article class="portfolio-card featured">
-      <span class="card-badge">Recommended</span>
-      <h3>Google Play Store</h3>
-      <p>Official listing: wallet top-ups and Google Play in-app purchases work <strong>only</strong> here. Trusted install, automatic updates, and the full billing experience.</p>
-      <div class="card-actions">
-        <a class="btn-play" href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer">
-          <span>Google Play</span>
-          <small>Install Now · com.pocketdev.ai.appbuilder</small>
-        </a>
+      <!-- Profile row -->
+      <div class="profile-row">
+        <img class="user-avatar" src="assets/pocketdev-logo-512.png" alt="Profile" style="width:64px;height:64px;border-radius:50%;border:3px solid #7C3AED" />
+        <div class="profile-info">
+          <div class="profile-name user-display-name">Loading…</div>
+          <div class="profile-email user-email">…</div>
+        </div>
+        <button class="signout-btn" onclick="window.signOutUser()">Sign Out</button>
       </div>
-    </article>
-    <article class="portfolio-card alt">
-      <span class="card-badge">Advanced / sideload</span>
-      <h3>Direct APK</h3>
-      <p>Only if you cannot use Play (test devices, enterprise, or no Google account on device). Same app binary is not a substitute for the Play build for <strong>payments</strong>.</p>
-      <div class="card-actions">
-        <a class="btn-apk" href="releases/PocketDev_AI_Android_V4.9.4.apk" download>PocketDev_AI_Android_V4.9.4.apk</a>
-        <div class="iap-notice">
-          <strong>Why we discourage sideloading for most users:</strong> Google Play Billing (wallet top-ups, IAP) is tied to the Play-signed build. A direct APK <strong>cannot</strong> use Play’s purchase flow — you may be unable to top up. <strong>Install from Google Play</strong> for the full wallet and billing experience.
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card balance">
+          <div class="stat-icon">💰</div>
+          <div class="stat-label">Wallet Balance</div>
+          <div class="stat-value balance-display">$0.0000</div>
+          <div class="balance-bar">
+            <div class="balance-bar-fill"></div>
+          </div>
+        </div>
+        <div class="stat-card requests">
+          <div class="stat-icon">🚀</div>
+          <div class="stat-label">Total Requests</div>
+          <div class="stat-value" id="stat-requests">0</div>
+        </div>
+        <div class="stat-card tokens">
+          <div class="stat-icon">🧠</div>
+          <div class="stat-label">Tokens Used</div>
+          <div class="stat-value" id="stat-tokens">0K</div>
         </div>
       </div>
-    </article>
+
+      <!-- Usage chart -->
+      <div class="chart-section">
+        <div class="section-title">📊 Daily Usage – Last 30 Days</div>
+        <canvas id="usageChart" height="200"></canvas>
+      </div>
+
+      <!-- Usage table -->
+      <div class="chart-section">
+        <div class="section-title">📋 Usage History</div>
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Requests</th>
+              <th>Tokens</th>
+              <th>Cost</th>
+            </tr>
+          </thead>
+          <tbody id="usageTableBody">
+            <tr><td colspan="4" class="table-empty">Sign in to view your usage history</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div><!-- /.dashboard-body -->
+  </div><!-- /.dashboard-modal -->
+</div><!-- /.modal-overlay -->
+
+<!-- ═══════════════════ HERO ═══════════════════ -->
+<section class="hero">
+  <div class="particles" id="particles"></div>
+
+  <div class="hero-badge">
+    <span class="badge-dot"></span>
+    Now with Gemini 2.5 Flash · Veo Video Generation
+  </div>
+
+  <h1>Your AI Agent,<br /><span class="gradient-text">Always in Your Pocket</span></h1>
+
+  <p>PocketDev is the most powerful agentic AI on Android — build apps, generate code, create images and ultra-realistic videos, all from a single prompt or voice command.</p>
+
+  <div class="hero-buttons">
+    <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="btn-primary" target="_blank" rel="noopener noreferrer">
+      ▶ Install on Google Play
+    </a>
+    <button class="btn-google" onclick="window.signInWithGoogle()">
+      <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Get $5 Free – Sign In
+    </button>
+    <a href="releases/PocketDev_AI_Android_V4.9.4.apk" class="btn-secondary" download>
+      ⬇ Direct APK
+    </a>
+  </div>
+
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="hero-stat-value">10<span class="accent">K+</span></div>
+      <div class="hero-stat-label">Downloads</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value"><span class="accent">$5</span></div>
+      <div class="hero-stat-label">Free Credits</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value">20<span class="accent">+</span></div>
+      <div class="hero-stat-label">AI Capabilities</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value">4.8<span class="accent">★</span></div>
+      <div class="hero-stat-label">User Rating</div>
+    </div>
   </div>
 </section>
 
-<!-- ── HOW IT WORKS ── -->
-<section id="how" style="background: var(--dark2);">
-  <div class="centered">
-    <span class="section-label">How it works</span>
-    <h2 class="section-title">From idea to code in minutes</h2>
-    <p class="section-sub">No setup, no laptop, no hassle.</p>
+<!-- ═══════════════════ FEATURES ═══════════════════ -->
+<section id="features">
+  <div class="features-header">
+    <div class="section-tag">Capabilities</div>
+    <h2 class="section-heading">Everything an AI Agent Can Do</h2>
+    <div class="section-divider center"></div>
+    <p class="section-sub" style="margin:0 auto; text-align:center">20+ powerful AI capabilities built into one pocket-sized app — no subscriptions, pay only for what you use.</p>
   </div>
-  <div class="steps">
+
+  <div class="features-grid">
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(124,58,237,.15)">⚡</div>
+      <div class="feature-title">Agentic AI Assistant</div>
+      <div class="feature-desc">A true AI agent that can reason, plan multi-step tasks, search the web, run code, and execute complex workflows autonomously.</div>
+      <span class="feature-badge">Gemini 2.5 Flash</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(16,185,129,.12)">📱</div>
+      <div class="feature-title">App Builder</div>
+      <div class="feature-desc">Describe an app in plain text or voice and watch PocketDev generate complete, working Android and web applications instantly.</div>
+      <span class="feature-badge">Code Generation</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(245,158,11,.12)">🎥</div>
+      <div class="feature-title">Ultra-Realistic Video</div>
+      <div class="feature-desc">Generate cinematic-quality videos from prompts with Veo 3 — the world's most advanced text-to-video AI model.</div>
+      <span class="feature-badge">Veo 3.1 Fast</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(79,209,197,.12)">🎨</div>
+      <div class="feature-title">AI Image Generation</div>
+      <div class="feature-desc">Create stunning images, edit photos, remove backgrounds, and apply artistic styles — all with natural language commands.</div>
+      <span class="feature-badge">Imagen 3</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(239,68,68,.12)">🎤</div>
+      <div class="feature-title">Voice Input & TTS</div>
+      <div class="feature-desc">Speak to your AI agent naturally. Full voice input with smart transcription and text-to-speech responses in any language.</div>
+      <span class="feature-badge">Multilingual</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(124,58,237,.15)">📷</div>
+      <div class="feature-title">Camera AI – Code from Photos</div>
+      <div class="feature-desc">Point your camera at a UI mockup, diagram, or printed code — PocketDev reads and implements it instantly.</div>
+      <span class="feature-badge">Vision AI</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(16,185,129,.12)">📂</div>
+      <div class="feature-title">Project Manager</div>
+      <div class="feature-desc">Organize multiple AI projects, save prompts and outputs, and track your work history — all in one place on your device.</div>
+      <span class="feature-badge">Unlimited Projects</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(245,158,11,.12)">💰</div>
+      <div class="feature-title">Wallet & Balance Tracking</div>
+      <div class="feature-desc">Real-time wallet balance, daily usage graphs, token consumption charts, and full transaction history in the web dashboard.</div>
+      <span class="feature-badge">Real-time</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(79,209,197,.12)">🌐</div>
+      <div class="feature-title">Web Search & Research</div>
+      <div class="feature-desc">The agent searches the internet, reads articles, compares products, and summarizes findings in real time.</div>
+      <span class="feature-badge">Live Web</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(239,68,68,.12)">💻</div>
+      <div class="feature-title">Built-in Code Editor</div>
+      <div class="feature-desc">Syntax-highlighted code editor with AI-powered autocomplete, refactoring, debugging, and one-tap sharing.</div>
+      <span class="feature-badge">Multi-language</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(124,58,237,.15)">🔗</div>
+      <div class="feature-title">Share & Export</div>
+      <div class="feature-desc">Share AI creations — code snippets, images, videos — directly to social media, messaging apps, or cloud storage.</div>
+      <span class="feature-badge">One-tap Share</span>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(16,185,129,.12)">🔒</div>
+      <div class="feature-title">Secure Backend</div>
+      <div class="feature-desc">Your API keys are never stored on-device. All AI requests route through our secure Firebase backend with per-user auth.</div>
+      <span class="feature-badge">Firebase Auth</span>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════ DASHBOARD PREVIEW ═══════════════════ -->
+<section id="dashboard-preview" style="padding-top:0">
+  <div style="text-align:center; margin-bottom:64px">
+    <div class="section-tag">Web Dashboard</div>
+    <h2 class="section-heading">Track Every Token, Every Day</h2>
+    <div class="section-divider center"></div>
+    <p class="section-sub" style="margin:0 auto; text-align:center">Sign in with Google to unlock your personal dashboard — live balance, daily usage charts, and complete transaction history.</p>
+  </div>
+
+  <div class="dashboard-preview">
+    <div class="preview-grid">
+      <div class="preview-card">
+        <div class="preview-card-title">💰 Wallet Balance</div>
+        <div class="preview-balance">$4.9832</div>
+        <div class="preview-bar"><div class="preview-bar-fill"></div></div>
+        <div style="font-size:12px;color:#4FD1C5;margin-top:8px">+$5.00 welcome bonus applied</div>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card-title">📊 Daily Requests</div>
+        <div class="mini-chart">
+          <div class="mini-bar" style="height:30%"></div>
+          <div class="mini-bar" style="height:50%"></div>
+          <div class="mini-bar" style="height:40%"></div>
+          <div class="mini-bar" style="height:70%"></div>
+          <div class="mini-bar" style="height:60%"></div>
+          <div class="mini-bar" style="height:90%"></div>
+          <div class="mini-bar" style="height:75%; background:rgba(79,209,197,.6)"></div>
+        </div>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card-title">🚀 Total API Calls</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:800;color:#fff">247</div>
+        <div style="font-size:12px;color:#A89DC8;margin-top:6px">Last 30 days</div>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card-title">🧠 Tokens Consumed</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:800;color:#F59E0B">1.2M</div>
+        <div style="font-size:12px;color:#A89DC8;margin-top:6px">Across all models</div>
+      </div>
+    </div>
+
+    <div style="text-align:center; margin-top:36px">
+      <button class="btn-primary" onclick="window.signInWithGoogle()" style="margin:0 auto; display:inline-flex">
+        Sign in to Open Your Dashboard
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ HOW IT WORKS ═══════════════════ -->
+<section id="how">
+  <div style="text-align:center; margin-bottom:64px">
+    <div class="section-tag">Get Started</div>
+    <h2 class="section-heading">Up & Running in 60 Seconds</h2>
+    <div class="section-divider center"></div>
+  </div>
+
+  <div class="steps-grid">
     <div class="step">
       <div class="step-num">1</div>
-      <div>
-        <h3>Install &amp; Sign Up</h3>
-        <p>Install from <strong>Google Play</strong> (recommended — wallet top-ups work there), or use the APK from our site if you need a direct install. Sign in with email or Google. Get $5 free credits.</p>
-      </div>
+      <div class="step-title">Install the App</div>
+      <div class="step-desc">Download PocketDev from Google Play — free, no account required to get started.</div>
     </div>
     <div class="step">
       <div class="step-num">2</div>
-      <div>
-        <h3>Describe Your Project</h3>
-        <p>Type what you want to build in plain English. "Make a login screen" or "Build a REST API client".</p>
-      </div>
+      <div class="step-title">Sign in with Google</div>
+      <div class="step-desc">Sign in once to claim your $5 welcome credits and unlock the full AI agent experience.</div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
-      <div>
-        <h3>AI Generates the Code</h3>
-        <p>PocketDev's AI writes clean, production-ready code in seconds. Review and edit in the built-in editor.</p>
-      </div>
+      <div class="step-title">Describe Your Idea</div>
+      <div class="step-desc">Type or speak your prompt. The AI agent plans, codes, and creates — in seconds.</div>
     </div>
     <div class="step">
       <div class="step-num">4</div>
-      <div>
-        <h3>Export & Ship</h3>
-        <p>Export your project files, share them, or continue building. Your work is saved and organized automatically.</p>
-      </div>
+      <div class="step-title">Build & Share</div>
+      <div class="step-desc">Review your creation, refine it with follow-up prompts, then share it anywhere.</div>
     </div>
   </div>
 </section>
 
-<!-- ── PRICING ── -->
+<!-- ═══════════════════ PRICING ═══════════════════ -->
 <section id="pricing">
-  <div class="centered">
-    <span class="section-label">Pricing</span>
-    <h2 class="section-title">Simple, transparent pricing</h2>
-    <p class="section-sub">No subscriptions. Pay only for what you use. Start completely free.</p>
+  <div style="text-align:center; margin-bottom:64px">
+    <div class="section-tag">Pricing</div>
+    <h2 class="section-heading">Pay for What You Use. Nothing More.</h2>
+    <div class="section-divider center"></div>
+    <p class="section-sub" style="margin:0 auto; text-align:center">No monthly subscriptions. No surprises. Transparent per-token pricing with a generous free tier.</p>
   </div>
+
   <div class="pricing-grid">
     <div class="pricing-card">
       <div class="pricing-name">Guest / Free</div>
       <div class="pricing-price"><sup>$</sup>0</div>
-      <div class="pricing-desc">No sign-up needed. Try PocketDev instantly.</div>
+      <div class="pricing-desc">No sign-up needed. Try PocketDev instantly with limited features.</div>
       <ul class="pricing-features">
-        <li>$5 free trial credits</li>
         <li>All core AI features</li>
-        <li>Project manager</li>
-        <li>Code editor</li>
-        <li>Guest mode — no login required</li>
+        <li>Project manager & code editor</li>
+        <li>Voice input</li>
+        <li>Guest mode – no login required</li>
+        <li>Community support</li>
       </ul>
-      <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="pricing-btn outline" target="_blank" rel="noopener noreferrer">Install Now</a>
+      <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="pricing-btn outline" target="_blank" rel="noopener noreferrer">Install Free</a>
     </div>
+
     <div class="pricing-card featured">
       <div class="pricing-badge">⭐ Most Popular</div>
       <div class="pricing-name">Pay-As-You-Go</div>
       <div class="pricing-price"><sup>$</sup>5 <sub>top-up</sub></div>
-      <div class="pricing-desc">Top up your wallet anytime. No expiry.</div>
+      <div class="pricing-desc">Start with $5 free credits on first login. Top up anytime. No expiry.</div>
       <ul class="pricing-features">
-        <li>$5 welcome bonus on first login</li>
-        <li>Unlimited projects</li>
-        <li>All AI models (GPT-4, Claude)</li>
-        <li>Camera AI — code from photos</li>
+        <li>$5 welcome bonus on first sign-in</li>
+        <li>All AI models (Gemini 2.5, Veo 3)</li>
+        <li>Video generation</li>
+        <li>Camera AI – code from photos</li>
+        <li>Real-time usage dashboard</li>
+        <li>Full wallet & transaction history</li>
         <li>Priority AI responses</li>
-        <li>Full wallet history & transactions</li>
       </ul>
-      <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="pricing-btn fill" target="_blank" rel="noopener noreferrer">Install Now — Google Play</a>
+      <button class="pricing-btn google" onclick="window.signInWithGoogle()">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign In with Google – Get $5 Free
+      </button>
+    </div>
+
+    <div class="pricing-card">
+      <div class="pricing-name">Enterprise</div>
+      <div class="pricing-price"><sup>$</sup><span style="font-size:36px">Custom</span></div>
+      <div class="pricing-desc">For teams and power users needing high volume and dedicated support.</div>
+      <ul class="pricing-features">
+        <li>Custom API key pool</li>
+        <li>Dedicated rate limits</li>
+        <li>Admin analytics dashboard</li>
+        <li>Priority support & SLA</li>
+        <li>Custom branding</li>
+      </ul>
+      <a href="mailto:hello@pocketdevapp.com" class="pricing-btn outline">Contact Us</a>
     </div>
   </div>
 </section>
 
-<!-- ── DOWNLOAD CTA ── -->
-<section id="download">
-  <span class="section-label">Quick links</span>
-  <h2>Start building today</h2>
-  <p class="lead">Free to start — $5 credits when you sign in. Prefer <strong>Google Play</strong> so purchases and updates work smoothly.</p>
-  <p class="sub"><a href="#portfolio" style="color:#A78BFA;">See download cards above</a> for Play vs APK details.</p>
-  <div class="hero-buttons" style="justify-content:center">
-    <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="btn-primary" target="_blank" rel="noopener noreferrer">Install Now — Google Play</a>
-    <a href="releases/PocketDev_AI_Android_V4.9.4.apk" class="btn-secondary" download>Direct APK (limited IAP)</a>
+<!-- ═══════════════════ DOWNLOAD ═══════════════════ -->
+<div class="download-section" id="download">
+  <div class="section-tag">Download</div>
+  <h2 class="section-heading">Start Building Today</h2>
+  <div class="section-divider center"></div>
+  <p class="section-sub" style="margin:0 auto 40px; text-align:center">Free to start — $5 credits the moment you sign in. Prefer Google Play for updates and in-app purchases.</p>
+  <div class="hero-buttons">
+    <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" class="btn-primary" target="_blank" rel="noopener noreferrer">▶ Install on Google Play</a>
+    <a href="releases/PocketDev_AI_Android_V4.9.4.apk" class="btn-secondary" download>⬇ Direct APK Download</a>
   </div>
-  <p style="margin-top:24px; font-size:13px; color:var(--muted);">
-    Android 8.0+ &nbsp;·&nbsp; No ads &nbsp;·&nbsp; IAP on Play only
-  </p>
-</section>
+  <p style="margin-top:24px; font-size:13px; color:var(--muted)">Android 8.0+ &nbsp;·&nbsp; No ads &nbsp;·&nbsp; IAP on Play only</p>
+</div>
 
-<!-- ── FOOTER ── -->
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
 <footer>
   <div class="footer-inner">
     <div class="footer-top">
       <div class="footer-brand">
         <div class="footer-logo-row">
-          <img class="footer-logo-img" src="assets/pocketdev-logo-512.png" alt="" width="52" height="52" decoding="async" />
-          <div class="logo-text">PocketDev</div>
+          <img class="footer-logo-img" src="assets/pocketdev-logo-512.png" alt="" width="42" height="42" decoding="async" />
+          <span class="footer-logo-text">PocketDev</span>
         </div>
-        <p>Your pocket-sized AI studio — apps, code, images, ultra-realistic video, and shareable moments. Build and ship faster.</p>
+        <p>Your pocket-sized agentic AI studio — apps, code, images, ultra-realistic video, and more. Build and ship faster than ever.</p>
       </div>
       <div class="footer-col">
         <h4>Product</h4>
         <a href="#features">Features</a>
-        <a href="#portfolio">Get the app</a>
+        <a href="#dashboard-preview">Dashboard</a>
         <a href="https://play.google.com/store/apps/details?id=com.pocketdev.ai.appbuilder" target="_blank" rel="noopener noreferrer">Google Play</a>
         <a href="#pricing">Pricing</a>
-        <a href="#download">Download &amp; APK</a>
-        <a href="#how">How it works</a>
+        <a href="#download">Download APK</a>
+        <a href="#how">How it Works</a>
       </div>
       <div class="footer-col">
         <h4>Legal</h4>
@@ -740,6 +1269,7 @@
         <h4>Contact</h4>
         <a href="mailto:hello@pocketdevapp.com">hello@pocketdevapp.com</a>
         <a href="https://pocketdevapp.com">pocketdevapp.com</a>
+        <a href="https://github.com/engrzubairshabbir/pocketdevapp.com" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
     </div>
     <div class="footer-bottom">
@@ -752,23 +1282,63 @@
   </div>
 </footer>
 
+<script>
+  // ── Nav scroll effect ──────────────────────────────────────────────────────
+  const nav = document.getElementById("mainNav");
+  window.addEventListener("scroll", () => {
+    nav.classList.toggle("scrolled", window.scrollY > 60);
+  }, { passive: true });
+
+  // ── Animated particles ─────────────────────────────────────────────────────
+  (function() {
+    const container = document.getElementById("particles");
+    if (!container) return;
+    const colors = ["rgba(124,58,237,0.3)", "rgba(79,209,197,0.2)", "rgba(245,158,11,0.15)"];
+    for (let i = 0; i < 20; i++) {
+      const p = document.createElement("div");
+      p.className = "particle";
+      const size = Math.random() * 6 + 3;
+      p.style.cssText = `
+        width:${size}px; height:${size}px;
+        left:${Math.random() * 100}%;
+        animation-duration:${Math.random() * 15 + 10}s;
+        animation-delay:${Math.random() * 10}s;
+        background:${colors[Math.floor(Math.random() * colors.length)]};
+      `;
+      container.appendChild(p);
+    }
+  })();
+
+  // ── Intersection observer for fade-in ─────────────────────────────────────
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.opacity = "1";
+        e.target.style.transform = "translateY(0)";
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll(".feature-card, .step, .pricing-card").forEach(el => {
+    el.style.opacity = "0";
+    el.style.transform = "translateY(24px)";
+    el.style.transition = "opacity .5s ease, transform .5s ease";
+    observer.observe(el);
+  });
+</script>
+
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "WebSite",
   "name": "PocketDev",
   "url": "https://pocketdevapp.com/",
-  "description": "AI apps, code, image editing, and ultra-realistic video from prompts or voice on Android.",
+  "description": "Agentic AI apps, code, image editing, and ultra-realistic video from prompts or voice on Android.",
   "publisher": {
     "@type": "Organization",
     "name": "PocketDev",
     "url": "https://pocketdevapp.com/",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://pocketdevapp.com/assets/pocketdev-logo-512.png",
-      "width": 512,
-      "height": 512
-    }
+    "logo": { "@type": "ImageObject", "url": "https://pocketdevapp.com/assets/pocketdev-logo-512.png", "width": 512, "height": 512 }
   }
 }
 </script>
@@ -776,13 +1346,12 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "PocketDev",
+  "name": "PocketDev AI",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Android",
   "image": "https://pocketdevapp.com/assets/pocketdev-logo-512.png",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
 </script>
-
 </body>
 </html>
